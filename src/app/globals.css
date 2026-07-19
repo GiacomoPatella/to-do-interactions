@@ -1,0 +1,732 @@
+/* ============================================================
+   TODO APP · an interaction study
+   Transferred out of the gpcodes portfolio, where it was built
+   by mistake. The study itself is unchanged.
+
+   ────────────────────────────────────────────────────────────
+   THE REBRAND SURFACE IS THE BLOCK DIRECTLY BELOW.
+   These 22 tokens are every design decision the study consumes.
+   Change their values and the whole thing rebrands: nothing in
+   rows-* below reads a hardcoded colour, size or radius.
+   Right now they carry the portfolio's cool slate values, so
+   this looks like the portfolio. That is the starting point to
+   move away from, not the destination.
+   ────────────────────────────────────────────────────────────
+   ============================================================ */
+
+:root {
+  /* ---- type scale ---- */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-md: 0.9375rem;
+  --text-base: 1.0625rem;
+
+  /* ---- spacing, 4px grid ---- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+
+  --radius: 10px;
+  --radius-sm: 6px;
+  --header-h: 3.5rem;
+
+  /* ---- colour ---- */
+  --bg: #fbfbfc;
+  --surface: #ffffff;
+  --wash: #f2f3f5;
+  --ink: #0e0f11;
+  --muted: #6b6f76;
+  --line: #e3e5e8;
+  --line-strong: #c9ccd2;
+  --accent-ink: #2c4a56;
+
+  --shadow: 0 1px 2px rgba(14, 15, 17, 0.05), 0 8px 32px rgba(14, 15, 17, 0.07);
+
+  --font-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f11;
+    --surface: #16171a;
+    --wash: #1c1e22;
+    --ink: #e9eaec;
+    --muted: #9aa0a8;
+    --line: #24262b;
+    --line-strong: #3a3d44;
+    --accent-ink: #7fa3b0;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.45);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.wrap {
+  max-width: 60rem;
+  margin-inline: auto;
+  padding: var(--sp-7) var(--sp-5);
+}
+
+/* ---- page furniture. Minimal on purpose: the study is the subject,
+   and this is the part most likely to be thrown away in the rebrand. ---- */
+
+.skip-link {
+  position: fixed;
+  top: var(--sp-2);
+  left: var(--sp-2);
+  z-index: 100;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--ink);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  transform: translateY(-300%);
+}
+.skip-link:focus-visible {
+  transform: none;
+}
+
+.eyebrow {
+  margin: 0 0 var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--muted);
+}
+
+h1 {
+  margin: 0 0 var(--sp-5);
+  font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.lede {
+  max-width: 44rem;
+  margin: 0 0 var(--sp-4);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+.notes {
+  max-width: 44rem;
+  margin-top: var(--sp-7);
+  padding-top: var(--sp-5);
+  border-top: 1px solid var(--line);
+}
+.notes h2 {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--text-md);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  color: var(--muted);
+}
+.notes p {
+  margin: 0 0 var(--sp-4);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  text-wrap: pretty;
+}
+
+/* ============================================================
+   /lab/rows · interaction study, Stage 1
+   The list is the specimen; the page is the microscope. Rules:
+   motion is transform and opacity only (position changes are
+   FLIP glides driven from RowsStudy.tsx), and every duration
+   is a base value times --t, which the 0.25x toggle sets to 4.
+   Stage 2 restyles the data-state hooks (idle / entering /
+   leaving / done); it should not need new ones.
+   ============================================================ */
+
+.rows-study {
+  /* The single speed dial. Everything below multiplies by it. */
+  --t: 1;
+  /* Curves lifted from studying rows.gg's stylesheet. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* enter, the default   */
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1); /* FLIP settles         */
+  --ease-spring: cubic-bezier(0.22, 1.4, 0.36, 1); /* the one overshoot */
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1); /* on-screen movement */
+  --ease-gravity: cubic-bezier(0.4, 0, 0.7, 0.2); /* falling away, Stage 2 */
+  --d-press: calc(120ms * var(--t));
+  --d-hover: calc(150ms * var(--t));
+  --d-enter: calc(220ms * var(--t));
+  --d-leave: calc(180ms * var(--t));
+  --d-settle: calc(260ms * var(--t));
+  --d-reorder: calc(200ms * var(--t));
+  margin-top: var(--sp-7);
+}
+.rows-study[data-slow="true"] {
+  --t: 4;
+}
+
+.rows-bench {
+  display: grid;
+  gap: var(--sp-5);
+  align-items: start;
+}
+@media (min-width: 56rem) {
+  .rows-bench {
+    grid-template-columns: minmax(0, 1fr) 19rem;
+  }
+}
+
+/* ---- add form ---- */
+
+.rows-add {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: stretch;
+}
+.rows-input-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: block;
+}
+.rows-input {
+  width: 100%;
+  padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--ink);
+  transition: border-color var(--d-hover) ease;
+}
+.rows-input::placeholder {
+  color: var(--muted);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-input:hover {
+    border-color: var(--line-strong);
+  }
+}
+.rows-input-kbd {
+  position: absolute;
+  right: var(--sp-2);
+  top: 50%;
+  transform: translateY(-50%);
+  transition: opacity var(--d-hover) ease;
+}
+.rows-input-wrap:focus-within .rows-input-kbd,
+.rows-input:not(:placeholder-shown) ~ .rows-input-kbd {
+  opacity: 0;
+}
+.rows-add-btn {
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    border-color var(--d-hover) ease,
+    background-color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-add-btn:hover {
+    background: var(--wash);
+  }
+}
+
+/* ---- the list ---- */
+
+.rows-listbox {
+  position: relative;
+  margin-top: var(--sp-3);
+}
+.rows-list {
+  position: relative; /* ghosts pin against this box */
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-height: 3.25rem;
+}
+.rows-list[data-drag-active] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.rows-row {
+  position: relative; /* lets data-dragging lift with z-index */
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--sp-1);
+  min-height: 3rem;
+  padding-inline: var(--sp-2) var(--sp-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  /* transform here is the enter timing: FLIP glides and drag releases
+     set their own inline transitions and win over this. */
+  transition:
+    transform var(--d-enter) var(--ease-spring),
+    opacity var(--d-enter) var(--ease-out),
+    border-color var(--d-hover) ease,
+    box-shadow var(--d-hover) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-row:hover {
+    border-color: var(--line-strong);
+  }
+}
+.rows-row[data-dragging] {
+  z-index: 2;
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+
+/* The Stage 2 seams. Entering rows occupy their space immediately (they
+   are in flow) and animate opacity/transform in; leaving rows are out of
+   flow at once, pinned to their last box, fading where they stood. */
+.rows-row[data-state="entering"] {
+  opacity: 0;
+  transform: translateY(-0.375rem) scale(0.98);
+}
+.rows-row[data-state="leaving"] {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  pointer-events: none;
+  transition:
+    opacity var(--d-leave) var(--ease-out),
+    transform var(--d-leave) var(--ease-out);
+}
+.rows-row[data-state="leaving"][data-out] {
+  opacity: 0;
+  transform: translateY(-0.375rem) scale(0.985);
+}
+
+/* ---- row internals ---- */
+
+.rows-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 2.5rem;
+  color: var(--muted);
+  opacity: 0.5;
+  cursor: grab;
+  touch-action: none; /* the grip is the touch drag surface */
+  transition: opacity var(--d-hover) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-grip {
+    opacity: 0;
+  }
+  .rows-row:hover .rows-grip,
+  .rows-row:focus .rows-grip,
+  .rows-row:focus-within .rows-grip {
+    opacity: 0.5;
+  }
+}
+.rows-row[data-dragging] .rows-grip {
+  cursor: grabbing;
+}
+
+.rows-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: transform var(--d-press) var(--ease-out);
+}
+.rows-check-box {
+  display: grid;
+  place-items: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid var(--line-strong);
+  /* concentric with the row: row radius 6 minus the inset */
+  border-radius: 4px;
+  transition:
+    background-color var(--d-hover) ease,
+    border-color var(--d-hover) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-check:hover .rows-check-box {
+    border-color: var(--muted);
+  }
+}
+.rows-row[data-state="done"] .rows-check-box,
+.rows-row[data-done="true"] .rows-check-box {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+.rows-check svg {
+  display: block;
+}
+.rows-check path {
+  stroke: var(--bg);
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  /* uncheck is quicker than check: exits are faster than enters */
+  transition: stroke-dashoffset calc(120ms * var(--t)) var(--ease-out);
+}
+.rows-row[data-state="done"] .rows-check path,
+.rows-row[data-done="true"] .rows-check path {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--d-enter) var(--ease-out)
+    calc(40ms * var(--t));
+}
+
+.rows-title {
+  justify-self: start;
+  max-width: 100%;
+  padding: var(--sp-2);
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: var(--ink);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: text;
+  transition:
+    color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-out);
+}
+.rows-row[data-state="done"] .rows-title,
+.rows-row[data-done="true"] .rows-title {
+  color: var(--muted);
+}
+.rows-title-text {
+  position: relative;
+  display: inline-block;
+}
+/* The strike is a transform-only wipe, drawn left to right, slightly
+   after the check so the two read as cause and effect. */
+.rows-title-text::after {
+  content: "";
+  position: absolute;
+  left: -0.05em;
+  right: -0.05em;
+  top: 50%;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform calc(120ms * var(--t)) var(--ease-out);
+}
+.rows-row[data-state="done"] .rows-title-text::after,
+.rows-row[data-done="true"] .rows-title-text::after {
+  transform: scaleX(1);
+  transition: transform var(--d-enter) var(--ease-out) calc(60ms * var(--t));
+}
+
+.rows-edit {
+  width: 100%;
+  padding: var(--sp-2);
+  font: inherit;
+  font-size: var(--text-md);
+  line-height: 1.4;
+  color: var(--ink);
+  background: none;
+  border: none;
+  outline: none;
+  /* the focus cue, without a layout-shifting border */
+  box-shadow: 0 1px 0 var(--accent-ink);
+}
+
+.rows-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    opacity var(--d-hover) ease,
+    color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-del {
+    opacity: 0;
+  }
+  .rows-row:hover .rows-del,
+  .rows-row:focus .rows-del,
+  .rows-row:focus-within .rows-del {
+    opacity: 1;
+  }
+  .rows-del:hover {
+    color: var(--ink);
+  }
+}
+
+/* ---- empty state ---- */
+
+.rows-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding-inline: var(--sp-3);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity var(--d-enter) var(--ease-out);
+}
+.rows-empty[data-in] {
+  opacity: 1;
+}
+.rows-empty button {
+  padding: 0;
+  background: none;
+  border: none;
+  font: inherit;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+/* ---- status line ---- */
+
+.rows-status {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: 2rem;
+  margin-top: var(--sp-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.rows-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-left: auto;
+  padding: 0.125rem var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    opacity var(--d-hover) ease,
+    background-color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-out);
+}
+.rows-undo[aria-hidden="true"] {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-undo:hover {
+    background: var(--wash);
+  }
+}
+
+/* ---- the readout panel ---- */
+
+.rows-readout {
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-5));
+  padding: var(--sp-4);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.rows-readout-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.rows-slow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 0.125rem var(--sp-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) ease,
+    color var(--d-hover) ease,
+    border-color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-out);
+}
+.rows-slow[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+
+.rows-log-wrap {
+  min-height: 9rem;
+  margin-top: var(--sp-3);
+}
+.rows-log {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.rows-log li {
+  overflow-wrap: anywhere;
+  transition:
+    opacity var(--d-hover) ease,
+    transform var(--d-enter) var(--ease-out);
+}
+/* Older entries fade down the stack: a depth cue, not a decoration. */
+.rows-log li:nth-child(2) {
+  opacity: 0.72;
+}
+.rows-log li:nth-child(3) {
+  opacity: 0.52;
+}
+.rows-log li:nth-child(4) {
+  opacity: 0.36;
+}
+.rows-log li:nth-child(5) {
+  opacity: 0.24;
+}
+.rows-log li[data-fresh] {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+}
+.rows-log-empty {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  max-width: 16rem;
+  text-wrap: pretty;
+}
+
+.rows-keys {
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+.rows-keys dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.375rem var(--sp-3);
+  align-items: baseline;
+  margin-top: var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.rows-keys dl > div {
+  display: contents;
+}
+.rows-keys dd {
+  margin: 0;
+}
+
+/* ---- press feedback: every pressable control ---- */
+.rows-check:active,
+.rows-del:active,
+.rows-title:active,
+.rows-add-btn:active,
+.rows-slow:active,
+.rows-undo:active,
+.rows-empty button:active {
+  transform: scale(0.97);
+}
+
+/* ---- reduced motion: fewer and gentler, not zero ----
+   Opacity crossfades stay; every translate and scale goes. The JS half
+   of this lives in RowsStudy.tsx (matchMedia), because this block cannot
+   stop a script from setting element.style.transform. */
+@media (prefers-reduced-motion: reduce) {
+  .rows-study .rows-row {
+    transition-property: opacity, border-color, box-shadow, background-color;
+  }
+  .rows-study .rows-row[data-state="entering"] {
+    transform: none;
+  }
+  .rows-study .rows-row[data-state="leaving"][data-out] {
+    transform: none;
+  }
+  .rows-study .rows-log li {
+    transition-property: opacity;
+  }
+  .rows-study .rows-log li[data-fresh] {
+    transform: none;
+  }
+  .rows-study .rows-check path {
+    transition: none;
+  }
+  .rows-study .rows-title-text::after {
+    transform: none;
+    opacity: 0;
+    transition: opacity calc(150ms * var(--t)) ease;
+  }
+  .rows-study .rows-row[data-state="done"] .rows-title-text::after,
+  .rows-study .rows-row[data-done="true"] .rows-title-text::after {
+    opacity: 1;
+  }
+  .rows-study button:active,
+  .rows-study .rows-title:active {
+    transform: none;
+  }
+}
+
+
