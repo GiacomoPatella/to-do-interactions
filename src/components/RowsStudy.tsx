@@ -1,7 +1,19 @@
 "use client";
 
 /**
- * /lab/rows · Stage 1: the working specimen.
+ * /lab/rows · the working specimen (Stage 1) plus the two signature
+ * moments (Stage 2): add is a seed that falls and sprouts, delete is a
+ * crumple that drops into a transient bin. Exactly two metaphors, by
+ * decision: complete, edit, reorder and focus stay plain, because
+ * restraint is what makes the two flourishes land.
+ *
+ * The signature moments use @keyframes where the base study uses
+ * transitions. That is deliberate, not a drift: the Stage 1 rule bans
+ * keyframes on elements the user can retrigger (they restart instead of
+ * retargeting), but a sprout overlay and a crumple ghost are one-shot
+ * elements that mount, play once and unmount. A burst of five deletes is
+ * five independent ghosts, each with its own animation and its own
+ * retirement, so nothing queues and nothing restarts.
  *
  * The list is a pretext; the transitions are the work. Three structural
  * decisions everything else hangs off:
@@ -36,7 +48,15 @@ import {
 } from "react";
 
 type Row = { id: string; text: string; done: boolean };
-type Ghost = { row: Row; top: number; out: boolean };
+/* kind "crumple" is the signature exit; "fade" is the reduced-motion
+   fallback, a plain opacity crossfade (the Stage 1 leaving state). */
+type Ghost = {
+  row: Row;
+  top: number;
+  height: number;
+  kind: "crumple" | "fade";
+  out: boolean;
+};
 type LogEntry = { id: number; text: string; fresh: boolean };
 
 type DragState = {
@@ -57,11 +77,15 @@ type DragState = {
    .rows-study in globals.css. The JS copies exist for the readout lines
    and for the timers that retire finished ghosts. */
 const D = { enter: 220, leave: 180, settle: 260, reorder: 200, hover: 150 };
+/* The two signature moments. Both under ~400ms at 1x, non-negotiable:
+   delight has to survive repetition. */
+const D2 = { sprout: 380, crumple: 400 };
 const EASE = {
   out: "cubic-bezier(0.22, 1, 0.36, 1)",
   expo: "cubic-bezier(0.16, 1, 0.3, 1)",
   spring: "cubic-bezier(0.22, 1.4, 0.36, 1)",
   inout: "cubic-bezier(0.65, 0, 0.35, 1)",
+  gravity: "cubic-bezier(0.4, 0, 0.7, 0.2)",
 };
 
 const STORE_KEY = "gp-lab-rows-v1";
@@ -78,6 +102,25 @@ const SEED = [
 
 let uidCounter = 0;
 const uid = () => `r${Date.now().toString(36)}${(uidCounter++).toString(36)}`;
+
+/** Accumulate an element's layout position by walking the offsetParent
+    chain. Trap this exists for: a transformed element becomes the
+    offsetParent of its descendants, so a single offsetTop read from
+    inside a mid-FLIP-glide status line resolves against the wrong box.
+    Summing the whole chain stays in layout coordinates (each link's
+    offset ignores its own transform), which is the final resting
+    geometry the crumple should aim at. */
+function layoutOffset(el: HTMLElement) {
+  let x = 0;
+  let y = 0;
+  let node: HTMLElement | null = el;
+  while (node) {
+    x += node.offsetLeft;
+    y += node.offsetTop;
+    node = node.offsetParent as HTMLElement | null;
+  }
+  return { x, y };
+}
 
 /** Clear an element's inline transition once its transform has settled.
     transitionend is the fast path; the timeout is the guarantee, because
@@ -146,6 +189,64 @@ const Cross = () => (
   </svg>
 );
 
+/* The sprout overlay: a seed dot that falls out of the input with
+   gravity easing and lands with one small bounce, then a stem and a
+   single leaf draw via stroke-dashoffset. Spare marks at hairline
+   weight, ink and accent only, not an illustration. The whole overlay
+   is one 380ms timeline; each piece keys off its own percentages. */
+const SproutMark = ({
+  onDone,
+}: {
+  onDone: (e: React.AnimationEvent) => void;
+}) => (
+  <span className="rows-sprout" aria-hidden="true" onAnimationEnd={onDone}>
+    <span className="rows-seed" />
+    <svg viewBox="0 0 24 24" width="24" height="24">
+      <path className="rows-stem" d="M12 18c.4-3-.5-6 0-9.5" pathLength={1} />
+      <path
+        className="rows-leaf"
+        d="M11.9 12.5c-1.5-.3-2.6-1.3-3-2.9"
+        pathLength={1}
+      />
+    </svg>
+  </span>
+);
+
+/* The bin: a transient mark at the end of the status line. Its slot is
+   always reserved (no layout shift); it only becomes visible while a
+   crumple is in flight, and the lid tips as the ball lands. */
+const BinIcon = () => (
+  <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+    <path className="rows-bin-lid" d="M5.2 7h9.6M8.6 7V5.9h2.8V7" />
+    <path
+      className="rows-bin-body"
+      d="M6.4 8.6l.75 8.1c.05.5.48.9 1 .9h3.7c.52 0 .95-.4 1-.9l.75-8.1"
+    />
+  </svg>
+);
+
+/* One face of a row, minus behaviour: used by the leaving ghosts (both
+   the crumple halves and the reduced-motion fade) so a deleted row
+   looks exactly like the row it was. */
+const GhostFace = ({ row }: { row: Row }) => (
+  <>
+    <span className="rows-grip" aria-hidden="true">
+      <GripDots />
+    </span>
+    <span className="rows-check">
+      <span className="rows-check-box">
+        <CheckMark />
+      </span>
+    </span>
+    <span className="rows-title">
+      <span className="rows-title-text">{row.text}</span>
+    </span>
+    <span className="rows-del">
+      <Cross />
+    </span>
+  </>
+);
+
 /** Mount-fade wrapper: renders hidden, flips data-in after two frames so
     the opacity transition has a painted "from" state to leave. */
 function FadeIn({
@@ -178,6 +279,14 @@ export default function RowsStudy() {
   const [loaded, setLoaded] = useState(false);
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [entering, setEntering] = useState<ReadonlySet<string>>(new Set());
+  /* Rows born through the add input: they carry the sprout for 380ms.
+     Undo and reseed keep the plain Stage 1 enter, the seed metaphor is
+     for new things only. */
+  const [sprouting, setSprouting] = useState<ReadonlySet<string>>(new Set());
+  /* lidTip > 0 while the bin lid is tipping (a landing just happened);
+     binHold keeps the bin visible briefly after the last ghost lands. */
+  const [lidTip, setLidTip] = useState(0);
+  const [binHold, setBinHold] = useState(false);
   const [editing, setEditing] = useState<{ id: string; draft: string } | null>(
     null,
   );
@@ -192,9 +301,14 @@ export default function RowsStudy() {
   const [live, setLive] = useState("");
 
   const studyRef = useRef<HTMLElement>(null);
+  const listboxRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const binRef = useRef<HTMLSpanElement>(null);
   const rowEls = useRef(new Map<string, HTMLLIElement>());
+  const ghostEls = useRef(new Map<string, HTMLLIElement>());
+  const sproutTimers = useRef(new Map<string, number>());
+  const ghostTimers = useRef(new Map<string, number>());
   const prevTops = useRef<Map<string, number> | null>(null);
   const mutationKind = useRef<"settle" | "reorder">("settle");
   const reduced = useRef(false);
@@ -284,12 +398,14 @@ export default function RowsStudy() {
 
   /* ---- FLIP, step one: measure before mutating ----
      Called synchronously by every mutating handler, while the DOM still
-     has the old layout. */
+     has the old layout. Scoped to the document, not the study: the page
+     opts its own elements in with data-flip (the prose section under
+     the study carries one), so nothing below the list snaps when the
+     list changes height. That is the answer to the bottom edge: there
+     is no bottom edge, everything below glides. */
   const snap = useCallback((kind: "settle" | "reorder" = "settle") => {
-    const scope = studyRef.current;
-    if (!scope) return;
     const m = new Map<string, number>();
-    scope.querySelectorAll<HTMLElement>("[data-flip]").forEach((el) => {
+    document.querySelectorAll<HTMLElement>("[data-flip]").forEach((el) => {
       m.set(el.dataset.flip as string, el.getBoundingClientRect().top);
     });
     prevTops.current = m;
@@ -330,7 +446,7 @@ export default function RowsStudy() {
     const kind = mutationKind.current;
 
     const moved: HTMLElement[] = [];
-    scope.querySelectorAll<HTMLElement>("[data-flip]").forEach((el) => {
+    document.querySelectorAll<HTMLElement>("[data-flip]").forEach((el) => {
       const key = el.dataset.flip as string;
       const before = prev.get(key);
       if (before == null) return;
@@ -389,14 +505,32 @@ export default function RowsStudy() {
     };
   }, [entering]);
 
-  /* ---- ghosts: same two-frame flip out, then retire on a timer that
-     respects the slow-motion multiplier ---- */
+  const retireGhost = useCallback((id: string) => {
+    setGhosts((gs) => gs.filter((g) => g.row.id !== id));
+  }, []);
+
+  const endSprout = useCallback((id: string) => {
+    setSprouting((s) => {
+      if (!s.has(id)) return s;
+      const next = new Set(s);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  /* ---- fade ghosts (reduced motion): two-frame flip to their "out"
+     state so the opacity crossfade has a painted start. Crumple ghosts
+     skip this entirely: their keyframes autoplay on mount. ---- */
   useLayoutEffect(() => {
-    if (!ghosts.some((g) => !g.out)) return;
+    if (!ghosts.some((g) => g.kind === "fade" && !g.out)) return;
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() =>
-        setGhosts((gs) => gs.map((g) => (g.out ? g : { ...g, out: true }))),
+        setGhosts((gs) =>
+          gs.map((g) =>
+            g.kind === "fade" && !g.out ? { ...g, out: true } : g,
+          ),
+        ),
       );
     });
     return () => {
@@ -405,14 +539,107 @@ export default function RowsStudy() {
     };
   }, [ghosts]);
 
+  /* ---- aim each fresh crumple at the bin ----
+     Post-mutation, pre-paint. layoutOffset() walks each offsetParent
+     chain, so the aim is the final resting geometry even while the
+     status line (which carries the bin) is mid-FLIP-glide. */
+  useLayoutEffect(() => {
+    const listbox = listboxRef.current;
+    const list = listRef.current;
+    const bin = binRef.current;
+    if (!listbox || !list || !bin) return;
+    ghosts.forEach((g) => {
+      if (g.kind !== "crumple") return;
+      const el = ghostEls.current.get(g.row.id);
+      if (!el || el.dataset.aimed) return;
+      el.dataset.aimed = "1";
+      const binAt = layoutOffset(bin);
+      const listboxAt = layoutOffset(listbox);
+      const dx =
+        binAt.x + bin.offsetWidth / 2 - (listboxAt.x + list.offsetWidth / 2);
+      const dy =
+        binAt.y + bin.offsetHeight / 2 - (listboxAt.y + g.top + g.height / 2);
+      el.style.setProperty("--fall-x", `${dx}px`);
+      el.style.setProperty("--fall-y", `${dy}px`);
+    });
+  }, [ghosts]);
+
+  /* ---- retirement is event-driven (animationend / transitionend on
+     the ghost itself); these timers are only the safety net, so a
+     hidden tab or a swallowed event can never leave a ghost behind ---- */
   useEffect(() => {
-    if (!ghosts.some((g) => g.out)) return;
-    const timer = setTimeout(
-      () => setGhosts((gs) => gs.filter((g) => !g.out)),
-      D.leave * (slow ? 4 : 1) + 80,
-    );
+    const t = slow ? 4 : 1;
+    ghosts.forEach((g) => {
+      if (ghostTimers.current.has(g.row.id)) return;
+      const ms = (g.kind === "crumple" ? D2.crumple : D.leave) * t + 500;
+      ghostTimers.current.set(
+        g.row.id,
+        window.setTimeout(() => retireGhost(g.row.id), ms),
+      );
+    });
+    for (const [id, timer] of ghostTimers.current) {
+      if (!ghosts.some((g) => g.row.id === id)) {
+        clearTimeout(timer);
+        ghostTimers.current.delete(id);
+      }
+    }
+  }, [ghosts, slow, retireGhost]);
+
+  /* ---- sprout lifecycle: ended by the overlay's animationend, with
+     the same kind of safety net ---- */
+  useEffect(() => {
+    const t = slow ? 4 : 1;
+    sprouting.forEach((id) => {
+      if (sproutTimers.current.has(id)) return;
+      sproutTimers.current.set(
+        id,
+        window.setTimeout(() => endSprout(id), D2.sprout * t + 300),
+      );
+    });
+    for (const [id, timer] of sproutTimers.current) {
+      if (!sprouting.has(id)) {
+        clearTimeout(timer);
+        sproutTimers.current.delete(id);
+      }
+    }
+  }, [sprouting, slow, endSprout]);
+
+  useEffect(() => {
+    const sTimers = sproutTimers.current;
+    const gTimers = ghostTimers.current;
+    return () => {
+      sTimers.forEach((t) => clearTimeout(t));
+      gTimers.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  /* ---- the bin: visible while a crumple is in flight, held briefly
+     after a landing (binHold is set by the landing event itself), lid
+     tipping while lidTip > 0 ---- */
+  const crumpleCount = ghosts.filter((g) => g.kind === "crumple").length;
+  useEffect(() => {
+    if (crumpleCount > 0 || !binHold) return;
+    const timer = setTimeout(() => setBinHold(false), 350);
     return () => clearTimeout(timer);
-  }, [ghosts, slow]);
+  }, [crumpleCount, binHold]);
+
+  useEffect(() => {
+    if (!lidTip) return;
+    const timer = setTimeout(() => setLidTip(0), 160 * (slow ? 4 : 1) + 80);
+    return () => clearTimeout(timer);
+  }, [lidTip, slow]);
+
+  /* A crumple has landed: retire the ghost, tip the lid, keep the bin
+     up for a beat. Each ghost reports its own landing, so bursts stay
+     independent. */
+  const onCrumpleLand = useCallback(
+    (id: string) => {
+      setLidTip((n) => n + 1);
+      setBinHold(true);
+      retireGhost(id);
+    },
+    [retireGhost],
+  );
 
   /* ---- fresh readout entries settle the same way ---- */
   useLayoutEffect(() => {
@@ -437,8 +664,14 @@ export default function RowsStudy() {
       snap();
       const id = uid();
       setRows((r) => [{ id, text: t, done: false }, ...r]);
-      setEntering((s) => new Set(s).add(id));
-      print("add", "enter", D.enter, EASE.spring);
+      if (reduced.current) {
+        // Reduced motion: the plain Stage 1 enter, which is opacity-only
+        // under the media query. No seed, no fall.
+        setEntering((s) => new Set(s).add(id));
+      } else {
+        setSprouting((s) => new Set(s).add(id));
+      }
+      print("add", "sprout", D2.sprout, EASE.spring);
       announce("row added");
     },
     [snap, print, announce],
@@ -473,13 +706,17 @@ export default function RowsStudy() {
       snap();
       if (el && list) {
         // Pin the ghost at the row's visual position (mid-glide included).
-        const top =
-          el.getBoundingClientRect().top - list.getBoundingClientRect().top;
-        setGhosts((gs) => [...gs, { row, top, out: false }]);
+        const rect = el.getBoundingClientRect();
+        const top = rect.top - list.getBoundingClientRect().top;
+        const kind = reduced.current ? "fade" : "crumple";
+        setGhosts((gs) => [
+          ...gs,
+          { row, top, height: rect.height, kind, out: false },
+        ]);
       }
       setRows((r) => r.filter((x) => x.id !== id));
       setUndoable({ row, index });
-      print("delete", "exit", D.leave, EASE.out);
+      print("delete", "crumple", D2.crumple, EASE.gravity);
       announce("row deleted, press command z to undo");
       // Focus must not die with the row.
       if (hadFocus) {
@@ -782,7 +1019,7 @@ export default function RowsStudy() {
             </button>
           </form>
 
-          <div className="rows-listbox">
+          <div className="rows-listbox" ref={listboxRef}>
             <ul
               ref={listRef}
               className="rows-list"
@@ -790,11 +1027,13 @@ export default function RowsStudy() {
               onKeyDown={onListKeyDown}
             >
               {rows.map((row) => {
-                const state = entering.has(row.id)
-                  ? "entering"
-                  : row.done
-                    ? "done"
-                    : "idle";
+                const isSprouting = sprouting.has(row.id);
+                const state =
+                  isSprouting || entering.has(row.id)
+                    ? "entering"
+                    : row.done
+                      ? "done"
+                      : "idle";
                 const isEditing = editing?.id === row.id;
                 return (
                   <li
@@ -807,6 +1046,7 @@ export default function RowsStudy() {
                     data-row-id={row.id}
                     data-flip={row.id}
                     data-state={state}
+                    data-enter={isSprouting ? "sprout" : undefined}
                     data-dragging={draggingId === row.id ? "true" : undefined}
                     tabIndex={row.id === rovingId ? 0 : -1}
                     aria-label={`${row.text}${row.done ? ", done" : ""}`}
@@ -882,39 +1122,83 @@ export default function RowsStudy() {
                     >
                       <Cross />
                     </button>
+                    {isSprouting && (
+                      <SproutMark
+                        onDone={(e) => {
+                          // Only the overlay's own life animation ends
+                          // the sprout; the seed and stem end earlier
+                          // and bubble through here too.
+                          if (e.animationName === "rows-sprout-life")
+                            endSprout(row.id);
+                        }}
+                      />
+                    )}
                   </li>
                 );
               })}
 
               {/* Leaving rows: out of flow immediately (position: absolute,
                   pinned to their last box) so siblings close the gap via
-                  FLIP while the ghost fades out where it stood. */}
-              {ghosts.map((g) => (
-                <li
-                  key={`ghost-${g.row.id}`}
-                  className="rows-row"
-                  data-state="leaving"
-                  data-out={g.out ? "true" : undefined}
-                  data-done={g.row.done ? "true" : undefined}
-                  style={{ top: g.top }}
-                  aria-hidden="true"
-                >
-                  <span className="rows-grip" aria-hidden="true">
-                    <GripDots />
-                  </span>
-                  <span className="rows-check">
-                    <span className="rows-check-box">
-                      <CheckMark />
+                  FLIP while the ghost plays out where it stood. A crumple
+                  ghost is two clipped copies of the row face folding
+                  toward each other in 3D, then the folded ball falls to
+                  the bin; a fade ghost (reduced motion) is the plain
+                  Stage 1 opacity crossfade. */}
+              {ghosts.map((g) =>
+                g.kind === "crumple" ? (
+                  <li
+                    key={`ghost-${g.row.id}`}
+                    ref={(el) => {
+                      if (el) ghostEls.current.set(g.row.id, el);
+                      else ghostEls.current.delete(g.row.id);
+                    }}
+                    className="rows-ghost"
+                    data-state="leaving"
+                    data-kind="crumple"
+                    style={{ top: g.top, height: g.height }}
+                    aria-hidden="true"
+                    onAnimationEnd={(e) => {
+                      if (e.animationName === "rows-crumple")
+                        onCrumpleLand(g.row.id);
+                    }}
+                  >
+                    <span className="rows-fold">
+                      <span className="rows-fold-half" data-half="l">
+                        <span
+                          className="rows-row rows-fold-face"
+                          data-done={g.row.done ? "true" : undefined}
+                        >
+                          <GhostFace row={g.row} />
+                        </span>
+                      </span>
+                      <span className="rows-fold-half" data-half="r">
+                        <span
+                          className="rows-row rows-fold-face"
+                          data-done={g.row.done ? "true" : undefined}
+                        >
+                          <GhostFace row={g.row} />
+                        </span>
+                      </span>
                     </span>
-                  </span>
-                  <span className="rows-title">
-                    <span className="rows-title-text">{g.row.text}</span>
-                  </span>
-                  <span className="rows-del">
-                    <Cross />
-                  </span>
-                </li>
-              ))}
+                  </li>
+                ) : (
+                  <li
+                    key={`ghost-${g.row.id}`}
+                    className="rows-row"
+                    data-state="leaving"
+                    data-out={g.out ? "true" : undefined}
+                    data-done={g.row.done ? "true" : undefined}
+                    style={{ top: g.top }}
+                    aria-hidden="true"
+                    onTransitionEnd={(e) => {
+                      if (e.propertyName === "opacity" && g.out)
+                        retireGhost(g.row.id);
+                    }}
+                  >
+                    <GhostFace row={g.row} />
+                  </li>
+                ),
+              )}
             </ul>
 
             {showEmpty && (
@@ -943,6 +1227,17 @@ export default function RowsStudy() {
             >
               undo delete <kbd>⌘z</kbd>
             </button>
+            {/* The bin's slot is always reserved so its arrival never
+                shifts layout; it is only visible mid-delete. */}
+            <span
+              ref={binRef}
+              className="rows-bin"
+              data-shown={crumpleCount > 0 || binHold ? "true" : undefined}
+              data-lid={lidTip ? "true" : undefined}
+              aria-hidden="true"
+            >
+              <BinIcon />
+            </span>
           </p>
         </div>
 
