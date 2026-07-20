@@ -62,7 +62,12 @@
   --line: #e2ddd2;
   --line-strong: #23201c;
 
-  --marker: #ff4d3d; /* felt red    — the action colour */
+  /* The action colour is black felt-tip, not a bright pen. The palette
+     is down to one colour with a job — the highlighter — and everything
+     else is ink on paper. Yellow is the only shout in the piece, which
+     is what makes it land; when the red was also shouting they argued.
+     Blue is system-only and never appears as decoration. */
+  --marker: #17150f; /* black felt  — the action colour */
   --hilite: #ffe600; /* highlighter — emphasis, never completion */
   --biro: #2b7fff; /* blue ink    — focus, system */
 
@@ -329,7 +334,11 @@ h1 {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  /* The grip is NOT a column. It hangs in the margin (see .rows-grip),
+     because a column that is invisible until hover still reserves its
+     width, and the whole list sat indented by a control most of the time
+     nobody could see. */
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--sp-1);
   min-height: 2.875rem;
@@ -339,7 +348,18 @@ h1 {
   transition:
     transform var(--d-enter) var(--ease-spring),
     opacity var(--d-enter) var(--ease-out),
+    filter var(--d-hover) ease,
     background-color var(--d-hover) ease;
+}
+
+/* Depth of field while dragging. The lifted row is already the only
+   object on the page — shadowed, opaque, off the rule — and pulling the
+   rest of the list a little out of focus says "these are the surface you
+   are moving over" without moving them. Kept under 1.5px: enough to read
+   as unfocused, not enough to make the text look broken. */
+.rows-list[data-drag-active] .rows-row:not([data-dragging]) {
+  filter: blur(1.3px);
+  opacity: 0.72;
 }
 
 /* The rule. It replaces the card border as the thing that gives the list
@@ -417,7 +437,15 @@ h1 {
 
 /* ---- row internals ---- */
 
+/* Out of flow, hanging in the gutter to the left of the list. It is a
+   handle on the row, not a part of it, and this way the row's left edge
+   is the checkbox at all times instead of shifting when the handle
+   appears. Everything below composes translateY(-50%) into its
+   transform, including the reduced-motion overrides. */
 .rows-grip {
+  position: absolute;
+  left: -1.4rem;
+  top: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -427,6 +455,7 @@ h1 {
   opacity: 0.45;
   cursor: grab;
   touch-action: none; /* the grip is the touch drag surface */
+  transform: translateY(-50%);
   transition:
     opacity var(--d-hover) ease,
     transform var(--d-hover) var(--ease-out);
@@ -442,7 +471,7 @@ h1 {
   }
   .rows-grip:hover {
     opacity: 0.9;
-    transform: scale(1.15);
+    transform: translateY(-50%) scale(1.15);
   }
 }
 .rows-row[data-dragging] .rows-grip {
@@ -502,6 +531,26 @@ h1 {
 .rows-row[data-done="true"] .rows-check path {
   stroke-dashoffset: 0;
   transition: stroke-dashoffset var(--d-enter) var(--ease-out);
+}
+
+/* A finished row recedes as a whole. The text was already muted while
+   the box stayed full-strength ink, which left the loudest mark on the
+   row belonging to the item that no longer needs attention. The box and
+   its tick now dim with everything else — still legible, still
+   clickable, just no longer competing with the work left to do. */
+.rows-row[data-state="done"] .rows-check,
+.rows-row[data-done="true"] .rows-check {
+  opacity: 0.4;
+}
+.rows-check {
+  transition: opacity var(--d-complete) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  /* Reaching for it brings it back: you cannot un-complete something you
+     can barely see. */
+  .rows-row[data-state="done"] .rows-check:hover {
+    opacity: 0.85;
+  }
 }
 
 .rows-title {
@@ -606,7 +655,9 @@ h1 {
   background: none;
   border: none;
   outline: none;
-  box-shadow: 0 1.5px 0 var(--biro);
+  /* No rule, no box. The caret and the selected text are enough to say
+     "this is editable"; a blue underline said it a second time, in the
+     one colour reserved for the system talking to you. */
 }
 
 /* The mark control. Hidden until hover like delete — except when the row
@@ -631,6 +682,7 @@ h1 {
 }
 .rows-mark svg {
   display: block;
+  transition: transform var(--d-hover) var(--ease-spring);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-mark {
@@ -642,15 +694,27 @@ h1 {
   .rows-row[data-marked] .rows-mark {
     opacity: 1;
   }
-  .rows-mark:hover {
-    transform: rotate(-12deg) scale(1.15);
+  /* The nib dips towards the text, as if it were about to be put down.
+     The transform is on the svg, never on the button: scaling the button
+     moves its own hover boundary, and near the edge that oscillates. */
+  .rows-mark:hover svg {
+    transform: translate(-1px, 1px) rotate(-14deg) scale(1.1);
+  }
+  /* ...and the highlighter actually touches the paper. A few pixels of
+     the swipe appear at the start of the line: the control demonstrates
+     itself instead of describing itself. Only when there is something to
+     demonstrate — an already-marked row would be showing you nothing,
+     and a done row outranks emphasis anyway. */
+  .rows-row:not([data-marked]):not([data-state="done"]):has(.rows-mark:hover)
+    .rows-title-text::before {
+    transform: scaleX(0.055);
   }
 }
 .rows-row[data-marked] .rows-mark {
   color: var(--ink);
 }
-.rows-mark:active {
-  transform: rotate(-12deg) scale(0.9);
+.rows-mark:active svg {
+  transform: rotate(-14deg) scale(0.9);
 }
 
 .rows-del {
@@ -679,15 +743,35 @@ h1 {
   .rows-row:focus-within .rows-del {
     opacity: 1;
   }
-  /* A quarter turn into the marker colour: the control telegraphs itself
-     before you commit to it. */
+  /* The lid opens: the bin telegraphs what it is for before you commit
+     to it, and the row it belongs to is the one whose bin is open.
+     Nothing transforms the button itself — the old cross scaled the
+     button, which moved its own hover boundary and made the icon
+     shiver whenever the pointer sat near the edge. */
   .rows-del:hover {
     color: var(--marker);
-    transform: rotate(90deg) scale(1.15);
+  }
+  .rows-del:hover svg {
+    transform: translateY(0.5px) scale(1.06);
+  }
+  .rows-del:hover .rows-del-lid {
+    transform: translate(-1.1px, -1.6px) rotate(-19deg);
   }
 }
-.rows-del:active {
-  transform: rotate(90deg) scale(0.9);
+.rows-del svg {
+  display: block;
+  overflow: visible;
+  transition: transform var(--d-hover) var(--ease-spring);
+}
+/* view-box units so the hinge is the left end of the lid, where a hinge
+   would be, rather than the centre of the icon. */
+.rows-del-lid {
+  transform-box: view-box;
+  transform-origin: 2.6px 4.3px;
+  transition: transform var(--d-hover) var(--ease-spring);
+}
+.rows-del:active svg {
+  transform: scale(0.9);
 }
 
 /* Add: the row's ruled line sweeps in from the left in marker red and
@@ -1000,7 +1084,7 @@ input[type="range"] {
    block cannot stop a script from setting element.style.transform. */
 @media (prefers-reduced-motion: reduce) {
   .rows-study .rows-row {
-    transition-property: opacity, background-color;
+    transition-property: opacity, filter, background-color;
   }
   .rows-study .rows-row[data-state="entering"] {
     transform: none;
@@ -1016,13 +1100,24 @@ input[type="range"] {
   .rows-study .rows-check-box,
   .rows-study .rows-check:hover .rows-check-box,
   .rows-study .rows-check:active .rows-check-box,
-  .rows-study .rows-grip:hover,
-  .rows-study .rows-del:hover,
-  .rows-study .rows-del:active,
-  .rows-study .rows-mark:hover,
-  .rows-study .rows-mark:active,
+  .rows-study .rows-del:hover svg,
+  .rows-study .rows-del:active svg,
+  .rows-study .rows-mark:hover svg,
+  .rows-study .rows-mark:active svg,
   .rows-study .rows-row:hover .rows-title {
     transform: none;
+  }
+  /* The lid still opens: it is a state change on an icon, not motion
+     across the page, and without it hovering the bin says nothing at
+     all. It just gets there without the spring. */
+  .rows-study .rows-del-lid {
+    transition-timing-function: ease;
+  }
+  /* The grip keeps its centring transform — dropping it would drop the
+     row out of alignment, not just stop it animating. */
+  .rows-study .rows-grip,
+  .rows-study .rows-grip:hover {
+    transform: translateY(-50%);
   }
   .rows-study .rows-check path {
     transition: none;
@@ -1036,6 +1131,13 @@ input[type="range"] {
   }
   .rows-study .rows-row[data-marked] .rows-title-text::before {
     opacity: 1;
+  }
+  /* No hover preview of the swipe: under reduced motion the highlighter
+     is an opacity fade, so a "few pixels" of it has nowhere to be. */
+  .rows-study
+    .rows-row:not([data-marked]):not([data-state="done"]):has(.rows-mark:hover)
+    .rows-title-text::before {
+    transform: none;
   }
   .rows-study .rows-row[data-state="done"] .rows-title-text::before,
   .rows-study .rows-row[data-done="true"] .rows-title-text::before {

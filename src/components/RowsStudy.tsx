@@ -192,19 +192,37 @@ const CheckMark = () => (
   </svg>
 );
 
-const Cross = () => (
-  <svg viewBox="0 0 10 10" width="10" height="10" aria-hidden="true">
-    <path
-      d="M1 1l8 8M9 1l-8 8"
-      stroke="currentColor"
-      strokeWidth="1.4"
-      strokeLinecap="round"
-    />
+/* A bin, drawn in two parts so the lid can hinge. The lid group is
+   lifted and tilted on hover by the stylesheet — the control opens
+   before you commit to it, which is the same idea the old rotating
+   cross was after, minus the jitter (that came from scaling the button
+   itself, so the hit area grew out from under the pointer and
+   oscillated; every transform now lives on the svg instead). */
+const TrashCan = () => (
+  <svg
+    viewBox="0 0 16 16"
+    width="15"
+    height="15"
+    aria-hidden="true"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.4"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <g className="rows-del-lid">
+      <path d="M2.6 4.3h10.8" />
+      <path d="M6.3 4.3l.35-1.7h2.7l.35 1.7" />
+    </g>
+    <path d="M4 5.8h8l-.62 7.1a1.2 1.2 0 0 1-1.2 1.1H5.82a1.2 1.2 0 0 1-1.2-1.1Z" />
   </svg>
 );
 
 /* A chisel-tip marker, held at the angle you would hold one. Filled nib
-   in the highlighter colour so the control names its own effect. */
+   in the highlighter colour so the control names its own effect.
+   Once the row IS marked the nib gains a small cross: the button has
+   become "take the highlight off", and a toggle that looks identical in
+   both states makes you click it to find out which one you are in. */
 const MarkerNib = ({ on }: { on: boolean }) => (
   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
     <g transform="rotate(-38 8 8)">
@@ -226,6 +244,19 @@ const MarkerNib = ({ on }: { on: boolean }) => (
         strokeLinejoin="round"
       />
     </g>
+    {on && (
+      <g className="rows-mark-x">
+        {/* The disc is the page colour, not transparent: the cross sits
+            over the nib and has to stay legible against it. */}
+        <circle cx="12.2" cy="12.2" r="3.5" fill="var(--bg)" stroke="none" />
+        <path
+          d="M10.9 10.9l2.6 2.6M13.5 10.9l-2.6 2.6"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </g>
+    )}
   </svg>
 );
 
@@ -250,7 +281,7 @@ const GhostFace = ({ row }: { row: Row }) => (
       <MarkerNib on={row.marked} />
     </span>
     <span className="rows-del">
-      <Cross />
+      <TrashCan />
     </span>
   </>
 );
@@ -1117,7 +1148,7 @@ export default function RowsStudy() {
                   aria-label="delete row"
                   onClick={() => deleteRow(row.id)}
                 >
-                  <Cross />
+                  <TrashCan />
                 </button>
               </li>
             );
