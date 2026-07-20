@@ -1200,8 +1200,9 @@ h1 {
   color: var(--paper);
 }
 
-/* The always-visible speed control: the one dial worth reaching for
-   without opening anything. */
+/* The always-visible time control: the one dial worth reaching for
+   without opening anything. It multiplies every duration, so 0.25× is a
+   quarter of the time and 3× is triple. The class name is historical. */
 .bar-speed {
   display: flex;
   align-items: center;

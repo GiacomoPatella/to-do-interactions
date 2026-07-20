@@ -100,7 +100,7 @@ const MOVE_EASES = {
 type MoveKey = keyof typeof MOVE_EASES;
 
 type Params = {
-  speed: number;
+  timeScale: number;
   draw: number;
   complete: number;
   mark: number;
@@ -120,7 +120,7 @@ type Params = {
    so it keeps its length. The net is roughly 0.8x on the functional
    half and unchanged on the two moments worth watching. */
 const DEFAULTS: Params = {
-  speed: 1,
+  timeScale: 1,
   draw: 210, // signature: the rule sweeping in. Left long.
   complete: 120, // the most repeated action in the app. Crisp.
   mark: 140,
@@ -131,7 +131,7 @@ const DEFAULTS: Params = {
   move: "swap",
 };
 
-type DurationKey = Exclude<keyof Params, "speed" | "move">;
+type DurationKey = Exclude<keyof Params, "timeScale" | "move">;
 
 const SLIDERS: { key: DurationKey; label: string }[] = [
   { key: "draw", label: "add" },
@@ -468,9 +468,12 @@ export default function RowsStudy() {
               next[key] = v;
             }
           }
-          const s = src.speed;
+          /* `speed` is the legacy key. It held the same number under a
+             name that claimed the opposite of what it did, so it is read
+             for continuity but never written again. */
+          const s = src.timeScale ?? src.speed;
           if (typeof s === "number" && Number.isFinite(s) && s >= 0.25 && s <= 3) {
-            next.speed = s;
+            next.timeScale = s;
           }
           if (typeof src.move === "string" && src.move in MOVE_EASES) {
             next.move = src.move as MoveKey;
@@ -605,7 +608,7 @@ export default function RowsStudy() {
       for (const el of moved) {
         el.style.transition = `${move}, opacity var(--d-hover) ease`;
         el.style.transform = "";
-        clearTransitionAfter(el, base * p.speed);
+        clearTransitionAfter(el, base * p.timeScale);
       }
     });
   }, [rows, applyDragTransform]);
@@ -664,7 +667,7 @@ export default function RowsStudy() {
         g.row.id,
         window.setTimeout(
           () => retireGhost(g.row.id),
-          p.leave * p.speed + 500,
+          p.leave * p.timeScale + 500,
         ),
       );
     });
@@ -684,7 +687,7 @@ export default function RowsStudy() {
       if (drawTimers.current.has(id)) return;
       drawTimers.current.set(
         id,
-        window.setTimeout(() => endDraw(id), p.draw * p.speed + 300),
+        window.setTimeout(() => endDraw(id), p.draw * p.timeScale + 300),
       );
     });
     for (const [id, timer] of drawTimers.current) {
@@ -832,7 +835,7 @@ export default function RowsStudy() {
     const p = paramsRef.current;
     staggerTimer.current = window.setTimeout(
       () => setStaggering(false),
-      (fresh.length * STAGGER_MS + p.enter) * p.speed + 100,
+      (fresh.length * STAGGER_MS + p.enter) * p.timeScale + 100,
     );
     announce("sample rows restored");
   }, [snap, announce]);
@@ -874,11 +877,16 @@ export default function RowsStudy() {
   }, []);
 
   const toggleSlow = useCallback(() => {
-    // The "s" shortcut, kept from the study: flip between full speed and
-    // quarter speed without opening the drawer.
-    setParams((p) => ({ ...p, speed: p.speed === 1 ? 0.25 : 1 }));
-    announce(params.speed === 1 ? "slow motion on" : "slow motion off");
-  }, [params.speed, announce]);
+    /* The "s" shortcut, kept from the study: stretch time so a flourish
+       can be watched, without opening the drawer.
+
+       This used to set 0.25 and announce "slow motion on", which did the
+       exact opposite — --t multiplies durations, so 0.25 ran everything
+       four times FASTER. 3x rather than 2x because at 2x the short
+       springs are still too quick to read. */
+    setParams((p) => ({ ...p, timeScale: p.timeScale === 1 ? 3 : 1 }));
+    announce(params.timeScale === 1 ? "slow motion on" : "slow motion off");
+  }, [params.timeScale, announce]);
 
   /* ---- app-wide shortcuts ---- */
   useEffect(() => {
@@ -1082,7 +1090,7 @@ export default function RowsStudy() {
     /* --t multiplies durations, so the equivalent time-scale here is its
        reciprocal. Unlike a spring's stiffness, playbackRate scales time
        exactly: what you inspect slowed down is the same motion. */
-    anim.playbackRate = 1 / (params.speed || 1);
+    anim.playbackRate = 1 / (params.timeScale || 1);
     el.style.transform = "";
     el.style.transition = "";
     releaseAnim.current = anim;
@@ -1106,7 +1114,7 @@ export default function RowsStudy() {
   /* Both halves of the timing system, handed to CSS as custom
      properties. Everything downstream is calc(--b-x * --t). */
   const vars = {
-    "--t": params.speed,
+    "--t": params.timeScale,
     "--b-enter": `${params.enter}ms`,
     "--b-leave": `${params.leave}ms`,
     "--b-settle": `${params.settle}ms`,
@@ -1404,18 +1412,23 @@ export default function RowsStudy() {
         )}
 
         <div className="bar-strip">
+          {/* "time", not "speed". The number multiplies every duration,
+              so 0.25× is a quarter of the time (faster) and 3× is triple
+              (slower). Labelling that "speed" inverted its meaning, and
+              a control in the bottom bar that says the opposite of what
+              it does undoes the reason the bar exists. */}
           <label className="bar-speed">
-            <span>speed</span>
+            <span>time</span>
             <input
               type="range"
               min={0.25}
-              max={2}
+              max={3}
               step={0.05}
-              value={params.speed}
-              aria-label="playback speed"
-              onChange={(e) => setParam("speed", Number(e.target.value))}
+              value={params.timeScale}
+              aria-label="time scale: multiplies every duration"
+              onChange={(e) => setParam("timeScale", Number(e.target.value))}
             />
-            <output>{params.speed.toFixed(2)}×</output>
+            <output>{params.timeScale.toFixed(2)}×</output>
           </label>
 
           <div className="bar-tabs">
