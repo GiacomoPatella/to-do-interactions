@@ -63,7 +63,25 @@ type DragState = {
   active: boolean;
   didReorder: boolean;
   el: HTMLLIElement;
+  /** Recent pointer positions, used to measure release velocity. Only
+      the last handful matter: sampling the whole gesture would average a
+      flick away against however long you spent holding still first. */
+  samples: { t: number; y: number }[];
 };
+
+/** Total settle time for a released row. This is --b-pop, the baked
+    spring's full duration, and like the other spring totals it is
+    deliberately not a drawer slider: the perceived speed is the ~110ms
+    visual duration, and printing 320 next to it would be a lie. */
+const RELEASE_MS = 320;
+/** Pointer samples older than this are ignored when measuring velocity:
+    it is the speed you let go at that matters, not the average. */
+const VELOCITY_WINDOW_MS = 90;
+/** px of overshoot per px/ms of release velocity, and the ceiling. A
+    hard cap matters more than the slope — without it, a fast flick on a
+    trackpad throws the row far enough to read as a glitch. */
+const OVERSHOOT_PER_VELOCITY = 11;
+const MAX_OVERSHOOT_PX = 14;
 
 /* The movement curve offered by the select. Only curves that make sense
    for something travelling between two layout positions: no ease-in,
@@ -365,6 +383,12 @@ export default function RowsStudy() {
   const mutationKind = useRef<"settle" | "reorder">("settle");
   const reduced = useRef(false);
   const drag = useRef<DragState | null>(null);
+  /* The WAAPI animation that carries a released row back into its slot.
+     Held so it can be cancelled: by grabbing the same row again, or by
+     a FLIP glide that needs the inline transform back (a running WAAPI
+     animation outranks inline styles, so FLIP cannot simply overwrite
+     it). */
+  const releaseAnim = useRef<Animation | null>(null);
   /* Guards commit-on-blur after Enter or Escape already closed the edit;
      without it the stale blur handler would commit a cancelled edit. */
   const editClosed = useRef(false);
@@ -532,6 +556,15 @@ export default function RowsStudy() {
     const scope = studyRef.current;
     if (!scope) return;
     const kind = mutationKind.current;
+
+    /* A running release animation outranks inline styles, so FLIP could
+       not move that row at all while it settled. Cancel it here, after
+       snap() has already photographed the row mid-settle: "before" is
+       therefore its true visual position and "after" its natural one, so
+       the glide picks up exactly where the settle left off rather than
+       snapping. */
+    releaseAnim.current?.cancel();
+    releaseAnim.current = null;
 
     const moved: HTMLElement[] = [];
     document.querySelectorAll<HTMLElement>("[data-flip]").forEach((el) => {
@@ -933,6 +966,11 @@ export default function RowsStudy() {
       // (touch-action: none) is the drag surface there.
       if (e.pointerType !== "mouse") return;
     }
+    // Grabbing a row that is still settling takes it over cleanly: the
+    // animation is cancelled so the inline transform is authoritative
+    // again, and the row is picked up from wherever it currently is.
+    releaseAnim.current?.cancel();
+    releaseAnim.current = null;
     drag.current = {
       id,
       pointerId: e.pointerId,
@@ -942,6 +980,7 @@ export default function RowsStudy() {
       active: false,
       didReorder: false,
       el: e.currentTarget,
+      samples: [{ t: e.timeStamp, y: e.clientY }],
     };
   }
 
@@ -949,6 +988,8 @@ export default function RowsStudy() {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     d.lastY = e.clientY;
+    d.samples.push({ t: e.timeStamp, y: e.clientY });
+    if (d.samples.length > 8) d.samples.shift();
     if (!d.active) {
       // A 3px threshold keeps plain clicks from becoming half-drags.
       if (Math.abs(d.lastY - d.startY) < 3) return;
@@ -995,13 +1036,67 @@ export default function RowsStudy() {
     if (reduced.current) {
       el.style.transition = "";
       el.style.transform = "";
-    } else {
-      // Release into the slot: the transition retargets from wherever
-      // the row currently is.
-      el.style.transition = "transform var(--d-reorder) var(--ease-move)";
-      el.style.transform = "";
-      clearTransitionAfter(el, params.reorder * params.speed);
+      if (d.didReorder) announce("row moved");
+      return;
     }
+
+    /* Release velocity, in px/ms, measured over the last stretch of the
+       gesture rather than the whole thing. This is the one interaction
+       in the app with real input velocity, so it is the one place
+       "responds like a physical object" is a true statement rather than
+       a decorative one: let go while still moving and the row carries
+       past its slot before settling; let go still and it just settles. */
+    const s = d.samples;
+    let velocity = 0;
+    if (s.length >= 2) {
+      const last = s[s.length - 1];
+      const first =
+        s.find((x) => last.t - x.t <= VELOCITY_WINDOW_MS) ?? s[0];
+      const dt = last.t - first.t;
+      if (dt > 0) velocity = (last.y - first.y) / dt;
+    }
+    const overshoot = Math.max(
+      -MAX_OVERSHOOT_PX,
+      Math.min(MAX_OVERSHOOT_PX, velocity * OVERSHOOT_PER_VELOCITY),
+    );
+
+    const from = dragY(d);
+    releaseAnim.current?.cancel();
+    // Hand the visual over to the animation before clearing the inline
+    // transform, so there is no frame where the row is untransformed.
+    const spring =
+      getComputedStyle(el).getPropertyValue("--ease-spring").trim() ||
+      "ease-out";
+    const anim = el.animate(
+      [
+        { transform: `translateY(${from}px) scale(1.01)` },
+        {
+          transform: `translateY(${overshoot}px) scale(1)`,
+          offset: 0.45,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        },
+        { transform: "translateY(0px) scale(1)" },
+      ],
+      { duration: RELEASE_MS, easing: spring, fill: "both" },
+    );
+    /* --t multiplies durations, so the equivalent time-scale here is its
+       reciprocal. Unlike a spring's stiffness, playbackRate scales time
+       exactly: what you inspect slowed down is the same motion. */
+    anim.playbackRate = 1 / (params.speed || 1);
+    el.style.transform = "";
+    el.style.transition = "";
+    releaseAnim.current = anim;
+    anim.finished
+      .then(() => {
+        if (releaseAnim.current === anim) {
+          anim.cancel();
+          releaseAnim.current = null;
+        }
+      })
+      .catch(() => {
+        /* cancelled by a new grab or a FLIP glide; nothing to undo */
+      });
+
     if (d.didReorder) announce("row moved");
   }
 
