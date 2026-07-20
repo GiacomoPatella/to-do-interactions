@@ -95,15 +95,21 @@ type Params = {
 
 /* Defaults mirror the .rows-study block in globals.css, which is what
    renders before this component hydrates. */
+/* Tuned by frequency, not by taste applied evenly: the more often an
+   action happens, the faster it has to be. Completing and reordering
+   are things you do dozens of times in a sitting and they now get out
+   of the way; the add sweep is once per row and is a signature moment,
+   so it keeps its length. The net is roughly 0.8x on the functional
+   half and unchanged on the two moments worth watching. */
 const DEFAULTS: Params = {
   speed: 1,
-  draw: 220,
-  complete: 160,
-  mark: 160,
-  leave: 140,
-  reorder: 165,
-  settle: 190,
-  enter: 150,
+  draw: 210, // signature: the rule sweeping in. Left long.
+  complete: 120, // the most repeated action in the app. Crisp.
+  mark: 140,
+  leave: 130, // deletes come in bursts; must not accumulate.
+  reorder: 130, // fires repeatedly mid-drag, has to keep up with the pointer.
+  settle: 170,
+  enter: 130,
   move: "swap",
 };
 

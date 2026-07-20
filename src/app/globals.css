@@ -194,21 +194,63 @@ h1 {
   /* Defaults. The controls overwrite these inline; they live here so the
      app is correct before the first paint and if JS never runs. */
   --t: 1;
-  --b-press: 90ms;
-  --b-hover: 110ms;
-  --b-enter: 150ms;
-  --b-leave: 140ms;
-  --b-settle: 190ms;
-  --b-reorder: 165ms;
-  --b-draw: 220ms;
-  --b-complete: 160ms;
-  --b-mark: 160ms;
+  --b-press: 70ms;
+  --b-hover: 90ms;
+  --b-enter: 130ms;
+  --b-leave: 130ms;
+  --b-settle: 170ms;
+  --b-reorder: 130ms;
+  --b-draw: 210ms;
+  --b-complete: 120ms;
+  --b-mark: 140ms;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-spring: cubic-bezier(0.22, 1.4, 0.36, 1);
   --ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
   /* The movement curve, swapped by the select in the bottom bar. */
   --ease-move: cubic-bezier(0.2, 1.15, 0.35, 1);
+
+  /* ---- real springs, baked ----
+     These are damped harmonic oscillators sampled into linear(). Not
+     "spring-ish" béziers: a cubic bézier has two control points, so it
+     can overshoot once and never oscillate. These carry the actual
+     decay envelope.
+
+     They stay compatible with the speed control for the reason a
+     runtime spring would not: a baked spring is an easing function over
+     a duration, so multiplying by --t is an exact time-scale. What you
+     inspect at 0.25x is what plays at 1x, which is the whole contract
+     the bottom bar makes.
+
+     Read the two numbers on each as: VISUAL is when it has arrived and
+     you stop perceiving movement; TOTAL is when it has finished
+     settling and must be the transition-duration. Setting the duration
+     to the visual number instead squashes the entire oscillation into
+     that window and you get a fast shiver, not a spring.
+
+     Regenerate with `node tools/spring.mjs`, which is parameterised by
+     visualDuration + bounce rather than stiffness/damping/mass because
+     nobody can predict the latter by eye. Retune there, not here. */
+
+  /* visual 110ms · total 320ms · peak 1.063 — the workhorse */
+  --ease-spring: linear(0, 0.0183, 0.0667, 0.1366, 0.2205, 0.3123, 0.4069, 0.5003, 0.5895, 0.6724, 0.7476, 0.8141, 0.8718, 0.9205, 0.9607, 0.993, 1.018, 1.0366, 1.0496, 1.0579, 1.0622, 1.0633, 1.0619, 1.0587, 1.0542, 1.0488, 1.043, 1.037, 1.0311, 1.0255, 1.0203, 1.0156, 1.0114, 1.0078, 1.0048, 1.0023, 1.0003, 0.9987, 0.9976, 0.9968, 0.9963, 0.9961, 0.996, 0.9961, 1);
+
+  /* visual 120ms · total 500ms · peak 1.133 — two visible wobbles, for
+     the moments where the wobble IS the point */
+  --ease-spring-lively: linear(0, 0.0263, 0.0956, 0.1946, 0.3116, 0.4366, 0.5615, 0.68, 0.7875, 0.8813, 0.9596, 1.0221, 1.0693, 1.1022, 1.1224, 1.1319, 1.1326, 1.1264, 1.1153, 1.1009, 1.0847, 1.068, 1.0516, 1.0364, 1.0228, 1.0111, 1.0016, 0.9941, 0.9887, 0.985, 0.983, 0.9823, 0.9826, 0.9837, 0.9854, 0.9875, 0.9897, 0.9919, 0.994, 0.996, 0.9977, 0.9991, 1.0002, 1.0011, 1);
+
+  /* visual 160ms · total 172ms · peak 1.001 — barely overshoots, so
+     total ≈ visual. This is the one that goes on durations the timings
+     drawer displays: a slider reading 150ms has to mean 150ms, and a
+     bouncy spring would make the number a lie by a factor of three. */
+  --ease-land: linear(0, 0.0116, 0.0422, 0.0862, 0.1393, 0.1981, 0.2598, 0.3223, 0.384, 0.4438, 0.5008, 0.5544, 0.6044, 0.6505, 0.6927, 0.731, 0.7657, 0.7967, 0.8244, 0.849, 0.8708, 0.8899, 0.9066, 0.9212, 0.9338, 0.9447, 0.9541, 0.9621, 0.969, 0.9748, 0.9797, 0.9838, 0.9872, 0.99, 0.9924, 0.9943, 0.9959, 0.9971, 0.9981, 0.9989, 0.9996, 1, 1.0004, 1.0006, 1);
+
+  /* The spring totals. Deliberately NOT in the timings drawer: they are
+     micro-interaction timings, and exposing a 320ms number for what
+     reads as a 110ms pop would be the same lie described above. */
+  --b-pop: 320ms;
+  --b-pop-lively: 500ms;
+  --d-pop: calc(var(--b-pop) * var(--t));
+  --d-pop-lively: calc(var(--b-pop-lively) * var(--t));
 
   --d-press: calc(var(--b-press) * var(--t));
   --d-hover: calc(var(--b-hover) * var(--t));
@@ -288,7 +330,7 @@ h1 {
     background-color var(--d-hover) ease,
     border-color var(--d-hover) ease,
     color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-spring);
+    transform var(--d-pop) var(--ease-spring);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-add-btn:hover {
@@ -346,7 +388,9 @@ h1 {
   border-radius: var(--radius-sm);
   background: var(--bg);
   transition:
-    transform var(--d-enter) var(--ease-spring),
+    /* --ease-land, not a bouncy spring: --b-enter is a number the
+       timings drawer prints, so total has to equal visual. */
+    transform var(--d-enter) var(--ease-land),
     opacity var(--d-enter) var(--ease-out),
     filter var(--d-hover) ease,
     background-color var(--d-hover) ease;
@@ -501,8 +545,13 @@ h1 {
   border: 2px solid var(--ink);
   border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
   transform: rotate(-1.5deg);
+  /* Asymmetric on purpose, and this pattern repeats on every springy
+     control below: only the ARRIVAL springs. Letting a 320ms spring run
+     backwards on un-hover makes the control feel reluctant to let go —
+     you have already moved on and it is still wobbling. Leaving is a
+     short, plain decelerate. */
   transition:
-    transform var(--d-hover) var(--ease-spring),
+    transform var(--d-hover) var(--ease-out),
     border-color var(--d-hover) ease;
 }
 @media (hover: hover) and (pointer: fine) {
@@ -510,6 +559,9 @@ h1 {
   .rows-check:hover .rows-check-box {
     border-color: var(--marker);
     transform: rotate(2deg) scale(1.12);
+    transition:
+      transform var(--d-pop) var(--ease-spring),
+      border-color var(--d-hover) ease;
   }
 }
 .rows-check:active .rows-check-box {
@@ -675,14 +727,14 @@ h1 {
   border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;
+  /* No transform on the button itself — see .rows-del for why. */
   transition:
     opacity var(--d-hover) ease,
-    color var(--d-hover) ease,
-    transform var(--d-hover) var(--ease-spring);
+    color var(--d-hover) ease;
 }
 .rows-mark svg {
   display: block;
-  transition: transform var(--d-hover) var(--ease-spring);
+  transition: transform var(--d-hover) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-mark {
@@ -699,6 +751,7 @@ h1 {
      moves its own hover boundary, and near the edge that oscillates. */
   .rows-mark:hover svg {
     transform: translate(-1px, 1px) rotate(-14deg) scale(1.1);
+    transition: transform var(--d-pop) var(--ease-spring);
   }
   /* ...and the highlighter actually touches the paper. A few pixels of
      the swipe appear at the start of the line: the control demonstrates
@@ -731,8 +784,7 @@ h1 {
   cursor: pointer;
   transition:
     opacity var(--d-hover) ease,
-    color var(--d-hover) ease,
-    transform var(--d-hover) var(--ease-spring);
+    color var(--d-hover) ease;
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-del {
@@ -753,22 +805,28 @@ h1 {
   }
   .rows-del:hover svg {
     transform: translateY(0.5px) scale(1.06);
+    transition: transform var(--d-pop) var(--ease-spring);
   }
+  /* The lid gets the lively spring — this is the one place in the app
+     where a second visible wobble is the charm rather than noise. A
+     hinged lid has real mass and swings past; that is what a lid does. */
   .rows-del:hover .rows-del-lid {
     transform: translate(-1.1px, -1.6px) rotate(-19deg);
+    transition: transform var(--d-pop-lively) var(--ease-spring-lively);
   }
 }
 .rows-del svg {
   display: block;
   overflow: visible;
-  transition: transform var(--d-hover) var(--ease-spring);
+  transition: transform var(--d-hover) var(--ease-out);
 }
 /* view-box units so the hinge is the left end of the lid, where a hinge
-   would be, rather than the centre of the icon. */
+   would be, rather than the centre of the icon. The lid drops shut
+   quickly and plainly; only opening springs. */
 .rows-del-lid {
   transform-box: view-box;
   transform-origin: 2.6px 4.3px;
-  transition: transform var(--d-hover) var(--ease-spring);
+  transition: transform var(--d-hover) var(--ease-in);
 }
 .rows-del:active svg {
   transform: scale(0.9);
@@ -869,7 +927,7 @@ h1 {
     opacity var(--d-hover) ease,
     background-color var(--d-hover) ease,
     color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-spring);
+    transform var(--d-pop) var(--ease-spring);
 }
 .rows-undo[aria-hidden="true"] {
   opacity: 0;
@@ -934,7 +992,7 @@ h1 {
     color var(--d-hover, 110ms) ease,
     border-color var(--d-hover, 110ms) ease,
     background-color var(--d-hover, 110ms) ease,
-    transform var(--d-press, 90ms) var(--ease-spring, ease);
+    transform var(--d-pop, 320ms) var(--ease-spring, ease);
 }
 @media (hover: hover) and (pointer: fine) {
   .bar-tab:hover {
@@ -1109,9 +1167,12 @@ input[type="range"] {
   }
   /* The lid still opens: it is a state change on an icon, not motion
      across the page, and without it hovering the bin says nothing at
-     all. It just gets there without the spring. */
-  .rows-study .rows-del-lid {
-    transition-timing-function: ease;
+     all. It just gets there without the spring — note this has to
+     out-specify the :hover rule that installs the lively spring, or the
+     wobble survives the media query. */
+  .rows-study .rows-del-lid,
+  .rows-study .rows-del:hover .rows-del-lid {
+    transition: transform var(--d-hover) ease;
   }
   /* The grip keeps its centring transform — dropping it would drop the
      row out of alignment, not just stop it animating. */
