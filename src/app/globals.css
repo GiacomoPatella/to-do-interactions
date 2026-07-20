@@ -87,6 +87,15 @@
   box-sizing: border-box;
 }
 
+/* Smoothing belongs on the root, not on body: applied lower down it can
+   end up inconsistent between elements that inherit from different
+   places. Both properties, so Firefox on macOS matches Safari and
+   Chrome. Ignored everywhere that is not macOS. */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -94,7 +103,6 @@ body {
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
 }
 
 /* Focus is biro blue everywhere, deliberately not the marker red action
@@ -155,6 +163,9 @@ h1 {
   font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
   font-weight: 700;
   line-height: 0.95;
+  /* Even line lengths rather than a stranded last word. Only matters at
+     the narrow end, which is exactly where it currently breaks. */
+  text-wrap: balance;
 }
 
 /* The highlighter swipe on the title. Emphasis — which is the only thing
@@ -203,6 +214,10 @@ h1 {
   --b-draw: 210ms;
   --b-complete: 120ms;
   --b-mark: 140ms;
+  /* Per-row delay when a whole list arrives at once. Mirrors STAGGER_MS
+     in RowsStudy.tsx. Short on purpose: past roughly 80ms a stagger stops
+     reading as cascade and starts reading as lag. */
+  --b-stagger: 40ms;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
@@ -261,6 +276,7 @@ h1 {
   --d-draw: calc(var(--b-draw) * var(--t));
   --d-complete: calc(var(--b-complete) * var(--t));
   --d-mark: calc(var(--b-mark) * var(--t));
+  --d-stagger: calc(var(--b-stagger) * var(--t));
 }
 
 /* ---- add form ---- */
@@ -447,6 +463,14 @@ h1 {
 .rows-row[data-state="entering"] {
   opacity: 0;
   transform: translateY(-0.25rem);
+}
+
+/* Staggered arrival, used only when a whole list appears at once (the
+   reseed). --row-i is on every row; the delay is only read while
+   data-stagger is set, so it can never leak into a FLIP glide, a hover
+   or a single row being added. */
+.rows-row[data-stagger] {
+  transition-delay: calc(var(--row-i, 0) * var(--d-stagger));
 }
 
 /* Leaving rows go out of flow at once, pinned to their last box, so
@@ -710,6 +734,11 @@ h1 {
   position: relative;
   z-index: 0;
   display: inline-block;
+  /* Row text wraps (overflow-wrap: anywhere above), and a long task
+     stranding one word on its own line is the most visible typographic
+     fault in the whole app. `pretty` rather than `balance`: these are
+     sentences, not headings, and there is no line count to equalise. */
+  text-wrap: pretty;
 }
 
 /* ---- emphasis: the highlighter, doing its actual job ----
@@ -810,6 +839,39 @@ h1 {
 .rows-mark svg {
   display: block;
   transition: transform var(--d-hover) var(--ease-out);
+}
+/* The two halves of the marked state, crossfaded rather than swapped.
+   Both are always in the DOM (see MarkerNib) so there is something to
+   transition between — React removing one and inserting the other gives
+   you a pop, which is the thing a transition is for. */
+.rows-mark-ink {
+  fill-opacity: 0;
+  transition: fill-opacity var(--d-mark) var(--ease-out);
+}
+.rows-row[data-marked] .rows-mark-ink {
+  fill-opacity: 1;
+}
+/* Scale from 0.25 with a touch of blur, per the icon-animation rule.
+   The blur is 1px rather than the usual 4: this badge is 7px across, and
+   4px of blur on a 7px mark does not soften it, it erases it. */
+.rows-mark-x {
+  transform-box: view-box;
+  transform-origin: 12.2px 12.2px;
+  opacity: 0;
+  filter: blur(1px);
+  transform: scale(0.25);
+  transition:
+    opacity var(--d-mark) cubic-bezier(0.2, 0, 0, 1),
+    filter var(--d-mark) cubic-bezier(0.2, 0, 0, 1),
+    transform var(--d-mark) cubic-bezier(0.2, 0, 0, 1);
+}
+.rows-row[data-marked] .rows-mark-x {
+  opacity: 1;
+  /* The minifier rewrites this to `blur()`, which looks broken but is
+     correct: the argument is optional and defaults to zero. Leave the
+     unit here anyway — it survives round-tripping and reads clearly. */
+  filter: blur(0px);
+  transform: scale(1);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-mark {

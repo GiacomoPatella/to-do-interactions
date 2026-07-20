@@ -128,6 +128,12 @@ const SLIDERS: { key: DurationKey; label: string }[] = [
 const STORE_KEY = "gp-lab-rows-v1";
 const PARAMS_KEY = "gp-lab-rows-params-v1";
 
+/* Per-row delay when a whole list arrives at once. Mirrors --b-stagger
+   in globals.css, and is only used here to work out when the sequence
+   has finished. Kept short: long stagger delays make an interface feel
+   slow rather than considered. */
+const STAGGER_MS = 40;
+
 /* First-visit seed: each sample row teaches one control. An empty list
    teaches nothing. */
 const SEED = [
@@ -228,8 +234,15 @@ const TrashCan = () => (
    in the highlighter colour so the control names its own effect.
    Once the row IS marked the nib gains a small cross: the button has
    become "take the highlight off", and a toggle that looks identical in
-   both states makes you click it to find out which one you are in. */
-const MarkerNib = ({ on }: { on: boolean }) => (
+   both states makes you click it to find out which one you are in.
+
+   Stateless on purpose. Both states are always in the DOM and the
+   stylesheet crossfades them off the row's data-marked, rather than
+   React swapping one for the other — an icon that pops in on a state
+   change is exactly the jarring switch a transition exists to prevent.
+   It also means the leaving ghost renders correctly for free, which it
+   did not when the fill was driven by a prop. */
+const MarkerNib = () => (
   <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
     <g transform="rotate(-38 8 8)">
       <rect
@@ -243,26 +256,25 @@ const MarkerNib = ({ on }: { on: boolean }) => (
         strokeWidth="1.3"
       />
       <path
+        className="rows-mark-ink"
         d="M6 8.2h4l-.7 3.2a1 1 0 0 1-1 .8h-.6a1 1 0 0 1-1-.8Z"
-        fill={on ? "var(--hilite)" : "none"}
+        fill="var(--hilite)"
         stroke="currentColor"
         strokeWidth="1.3"
         strokeLinejoin="round"
       />
     </g>
-    {on && (
-      <g className="rows-mark-x">
-        {/* The disc is the page colour, not transparent: the cross sits
-            over the nib and has to stay legible against it. */}
-        <circle cx="12.2" cy="12.2" r="3.5" fill="var(--bg)" stroke="none" />
-        <path
-          d="M10.9 10.9l2.6 2.6M13.5 10.9l-2.6 2.6"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </g>
-    )}
+    <g className="rows-mark-x">
+      {/* The disc is the page colour, not transparent: the cross sits
+          over the nib and has to stay legible against it. */}
+      <circle cx="12.2" cy="12.2" r="3.5" fill="var(--bg)" stroke="none" />
+      <path
+        d="M10.9 10.9l2.6 2.6M13.5 10.9l-2.6 2.6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </g>
   </svg>
 );
 
@@ -284,7 +296,7 @@ const GhostFace = ({ row }: { row: Row }) => (
       <span className="rows-title-text">{row.text}</span>
     </span>
     <span className="rows-mark">
-      <MarkerNib on={row.marked} />
+      <MarkerNib />
     </span>
     <span className="rows-del">
       <TrashCan />
@@ -336,6 +348,7 @@ export default function RowsStudy() {
   );
   const [params, setParams] = useState<Params>(DEFAULTS);
   const [drawer, setDrawer] = useState<null | "timings" | "keys">(null);
+  const [staggering, setStaggering] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -346,6 +359,7 @@ export default function RowsStudy() {
   const inputRef = useRef<HTMLInputElement>(null);
   const rowEls = useRef(new Map<string, HTMLLIElement>());
   const drawTimers = useRef(new Map<string, number>());
+  const staggerTimer = useRef(0);
   const ghostTimers = useRef(new Map<string, number>());
   const prevTops = useRef<Map<string, number> | null>(null);
   const mutationKind = useRef<"settle" | "reorder">("settle");
@@ -654,6 +668,7 @@ export default function RowsStudy() {
     return () => {
       dTimers.forEach((t) => clearTimeout(t));
       gTimers.forEach((t) => clearTimeout(t));
+      clearTimeout(staggerTimer.current);
     };
   }, []);
 
@@ -774,6 +789,18 @@ export default function RowsStudy() {
     }));
     setRows(fresh);
     setEntering(new Set(fresh.map((r) => r.id)));
+    /* Stagger the arrival. Five rows landing on the same frame reads as
+       a repaint rather than as a list arriving. This is the one place it
+       is worth doing — restoring the samples is rare, and rare is what
+       buys an animation the right to be decorative. Rows added one at a
+       time are never staggered: there is nothing to stagger against. */
+    setStaggering(true);
+    window.clearTimeout(staggerTimer.current);
+    const p = paramsRef.current;
+    staggerTimer.current = window.setTimeout(
+      () => setStaggering(false),
+      (fresh.length * STAGGER_MS + p.enter) * p.speed + 100,
+    );
     announce("sample rows restored");
   }, [snap, announce]);
 
@@ -1041,7 +1068,7 @@ export default function RowsStudy() {
           data-drag-active={draggingId ? "true" : undefined}
           onKeyDown={onListKeyDown}
         >
-          {rows.map((row) => {
+          {rows.map((row, i) => {
             const isDrawing = drawing.has(row.id);
             const state =
               isDrawing || entering.has(row.id)
@@ -1064,6 +1091,12 @@ export default function RowsStudy() {
                 data-enter={isDrawing ? "draw" : undefined}
                 data-marked={row.marked ? "true" : undefined}
                 data-dragging={draggingId === row.id ? "true" : undefined}
+                data-stagger={staggering ? "true" : undefined}
+                /* Read by the stylesheet as the stagger multiplier. It is
+                   set on every row, but only consumed while data-stagger
+                   is present, so a delay never leaks into a FLIP glide or
+                   a hover. */
+                style={{ "--row-i": i } as React.CSSProperties}
                 tabIndex={row.id === rovingId ? 0 : -1}
                 aria-label={`${row.text}${row.marked ? ", highlighted" : ""}${
                   row.done ? ", done" : ""
@@ -1145,7 +1178,7 @@ export default function RowsStudy() {
                   }
                   onClick={() => toggleMark(row.id)}
                 >
-                  <MarkerNib on={row.marked} />
+                  <MarkerNib />
                 </button>
                 <button
                   type="button"
@@ -1172,6 +1205,11 @@ export default function RowsStudy() {
               data-state="leaving"
               data-out={g.out ? "true" : undefined}
               data-done={g.row.done ? "true" : undefined}
+              /* Without this a highlighted row lost its swipe the instant
+                 you deleted it: the ghost is a different element and the
+                 highlight is driven off data-marked, so the exit started
+                 from a state the row was never in. */
+              data-marked={g.row.marked ? "true" : undefined}
               style={{ top: g.top }}
               aria-hidden="true"
               onTransitionEnd={(e) => {
