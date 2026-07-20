@@ -8,7 +8,7 @@ added, completed, highlighted, reordered, edited, deleted. The list is a pretext
 Every duration in the app is exposed as a live control in the bottom bar, because
 the point is that the motion was *chosen* rather than accepted from a default.
 
-**[Live demo →](#)** *(link once deployed)*
+**[Live demo →](https://to-do-interactions.vercel.app/)**
 
 ---
 
