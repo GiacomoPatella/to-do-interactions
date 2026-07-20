@@ -208,7 +208,11 @@ h1 {
   --b-press: 70ms;
   --b-hover: 90ms;
   --b-enter: 130ms;
-  --b-leave: 130ms;
+  /* Nudged up from 130: the shrink into the bin has further to travel
+     than the old flick did, and below about 150 the lid and the row
+     resolve on top of each other instead of in sequence. Still inside
+     the burst-delete budget. */
+  --b-leave: 150ms;
   --b-settle: 170ms;
   --b-reorder: 130ms;
   --b-draw: 210ms;
@@ -221,6 +225,9 @@ h1 {
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
+  /* Pulled in, then arrives. Used by the delete: accelerate away from
+     the resting position, decelerate into the bin. */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   /* The movement curve, swapped by the select in the bottom bar. */
   --ease-move: cubic-bezier(0.2, 1.15, 0.35, 1);
 
@@ -480,27 +487,76 @@ h1 {
    it. */
 .rows-row[data-state="leaving"] {
   position: absolute;
-  z-index: 0;
+  /* ABOVE the live rows, which reverses the previous arrangement and
+     needs saying. When the exit was a flick off the left edge, sitting
+     at z-index 0 was right: the closing list wiped over the ghost
+     instead of blending with it. This exit converges on a point inside
+     the ghost's own row, so being wiped over would hide the entire
+     thing. It is on top now, and it earns that by being gone fast. */
+  z-index: 2;
   left: 0;
   right: 0;
   pointer-events: none;
   background: none;
-  /* Opacity is deliberately quicker than the movement: the row should be
-     visually gone well before its neighbours finish arriving. */
+  /* The bin is the destination, so the scale has to converge on it
+     rather than on the row's centre. This lands the origin on the
+     delete control: the row's right padding, plus half that control's
+     width. Everything then falls into the bin for free — no measuring,
+     no coordinates, and the target travels with the ghost. */
+  transform-origin: calc(100% - var(--sp-1) - 1.125rem) 50%;
+  /* Opacity now trails the movement rather than leading it. Fading
+     early was right when the row was leaving the page; here you need to
+     still see it when it arrives at the bin, or the metaphor plays to
+     an empty stage.
+
+     in-out, NOT ease-in, and the difference is not subtle. Measured at
+     the 75ms mark where the lid shuts: ease-in leaves the row at 87%
+     scale, so the lid closes on something that has barely moved and the
+     row then collapses separately. ease-out puts it at 15% and 4%
+     opacity — gone before the lid even starts. in-out lands it at 56%,
+     visibly half-swallowed at exactly the moment the lid comes down,
+     which is the only version where the two read as one action. */
   transition:
-    opacity calc(var(--d-leave) * 0.65) var(--ease-out),
-    transform var(--d-leave) var(--ease-in);
+    opacity calc(var(--d-leave) * 0.9) var(--ease-in-out),
+    transform var(--d-leave) var(--ease-in-out);
 }
 .rows-row[data-state="leaving"]::after {
   opacity: 0;
 }
-/* Delete: flicked off the page. Accelerating away, a little to the left,
-   a couple of degrees of rotation so it reads as swept rather than
-   dissolved. One transition, fully interruptible: a burst of deletes is
-   a burst of independent ghosts and nothing queues. */
+/* The bin has to be visible on the ghost or there is nothing to fall
+   into: the control is hover-revealed on live rows, and a ghost never
+   matches :hover. */
+.rows-row[data-state="leaving"] .rows-del {
+  opacity: 1;
+}
+/* Delete: the row is drawn into its own bin. Accelerating in, with a
+   few degrees of rotation so it reads as a sheet of paper being pulled
+   rather than a box being scaled. One transition, fully interruptible:
+   a burst of deletes is a burst of independent ghosts and nothing
+   queues. */
 .rows-row[data-state="leaving"][data-out] {
   opacity: 0;
-  transform: translateX(-1.5rem) rotate(-2.5deg) scale(0.96);
+  transform: scale(0.12) rotate(-5deg);
+}
+
+/* The lid does the acting.
+
+   The instinct is to make the ROW perform — crumple it, arc it across
+   the screen. That is what dies on the tenth repeat, because it is a
+   big object travelling a long way and you cannot help watching it.
+   The lid is 10px and moves for 75ms, so it stays satisfying at the
+   fiftieth delete.
+
+   It starts open because that is the state you were just looking at —
+   you clicked the bin, so its lid was up — and slams shut while the row
+   is still shrinking. That ordering is the whole gag: the lid closes ON
+   the row, rather than the row vanishing and the lid closing after. */
+.rows-row[data-state="leaving"] .rows-del-lid {
+  transform: translate(-1.1px, -1.6px) rotate(-19deg);
+  transition: transform calc(var(--d-leave) * 0.5) var(--ease-in);
+}
+.rows-row[data-state="leaving"][data-out] .rows-del-lid {
+  transform: none;
 }
 
 /* ---- row internals ---- */

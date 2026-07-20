@@ -106,7 +106,7 @@ const DEFAULTS: Params = {
   draw: 210, // signature: the rule sweeping in. Left long.
   complete: 120, // the most repeated action in the app. Crisp.
   mark: 140,
-  leave: 130, // deletes come in bursts; must not accumulate.
+  leave: 150, // the shrink into the bin; see --b-leave in globals.css.
   reorder: 130, // fires repeatedly mid-drag, has to keep up with the pointer.
   settle: 170,
   enter: 130,
