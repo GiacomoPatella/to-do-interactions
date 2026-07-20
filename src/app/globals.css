@@ -1,20 +1,37 @@
 /* ============================================================
-   TODO APP · an interaction study
-   Transferred out of the gpcodes portfolio, where it was built
-   by mistake. The study itself is unchanged.
+   TODO APP
+   A to-do list, centred on the page, with a bottom bar that
+   exposes the transition timings as live controls.
 
    ────────────────────────────────────────────────────────────
    THE REBRAND SURFACE IS THE BLOCK DIRECTLY BELOW.
-   These 22 tokens are every design decision the study consumes.
+   These tokens are every design decision the app consumes.
    Change their values and the whole thing rebrands: nothing in
    rows-* below reads a hardcoded colour, size or radius.
-   Right now they carry the portfolio's cool slate values, so
-   this looks like the portfolio. That is the starting point to
-   move away from, not the destination.
+
+   IDENTITY: felt-tip sketchbook.
+   Bright paper, biro black, and three pen colours — marker red,
+   highlighter yellow, biro blue. The list is a list on paper:
+   no cards, no containers, just a hand-drawn checkbox, the text,
+   and a ruled line under each row.
+
+   Explicitly NOT retro. An earlier attempt went risograph and
+   read as a reproduction of an old artefact, which was the note.
+   No aged cream, no sepia, no newsprint, no misregistration. The
+   stock is clean and bright and the inks are saturated. The
+   reference is a felt-tip pen used today.
+
+   LIGHT ONLY, on purpose. There is no prefers-color-scheme
+   block and there should not be one: the app kept coming up
+   dark for anyone on a dark OS, and the identity is the bright
+   sheet of paper. The color-scheme declaration below also keeps
+   the native form controls (the range sliders) in light dress.
    ────────────────────────────────────────────────────────────
    ============================================================ */
 
 :root {
+  color-scheme: light;
+
   /* ---- type scale ---- */
   --text-xs: 0.6875rem;
   --text-sm: 0.8125rem;
@@ -32,36 +49,33 @@
 
   --radius: 10px;
   --radius-sm: 6px;
-  --header-h: 3.5rem;
 
-  /* ---- colour ---- */
-  --bg: #fbfbfc;
+  /* ---- colour: paper and the pens ----
+     Named for the pen, not the job, so reassigning a role never
+     means renaming a colour. */
+  --paper: #fffdf7;
+  --bg: var(--paper);
   --surface: #ffffff;
-  --wash: #f2f3f5;
-  --ink: #0e0f11;
-  --muted: #6b6f76;
-  --line: #e3e5e8;
-  --line-strong: #c9ccd2;
-  --accent-ink: #2c4a56;
+  --wash: #f6f2e8;
+  --ink: #23201c;
+  --muted: #8a8178;
+  --line: #e2ddd2;
+  --line-strong: #23201c;
 
-  --shadow: 0 1px 2px rgba(14, 15, 17, 0.05), 0 8px 32px rgba(14, 15, 17, 0.07);
+  --marker: #ff4d3d; /* felt red    — the action colour */
+  --hilite: #ffe600; /* highlighter — done */
+  --biro: #2b7fff; /* blue ink    — focus, system */
+
+  --accent-ink: var(--marker);
+  --focus: var(--biro);
+
+  --shadow: 0 6px 18px rgba(35, 32, 28, 0.14);
 
   --font-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
-}
+  --font-display: var(--font-display-src), "Bradley Hand", cursive;
+  --font-sans: var(--font-text-src), ui-sans-serif, system-ui, sans-serif;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0e0f11;
-    --surface: #16171a;
-    --wash: #1c1e22;
-    --ink: #e9eaec;
-    --muted: #9aa0a8;
-    --line: #24262b;
-    --line-strong: #3a3d44;
-    --accent-ink: #7fa3b0;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 32px rgba(0, 0, 0, 0.45);
-  }
+  --bar-h: 3.25rem;
 }
 
 * {
@@ -78,20 +92,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Focus is biro blue everywhere, deliberately not the marker red action
+   colour: "the system is talking to you" must never be confused with
+   "this is the thing you just did". */
 :focus-visible {
-  outline: 2px solid var(--accent-ink);
-  outline-offset: 2px;
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
   border-radius: var(--radius-sm);
 }
 
-.wrap {
-  max-width: 60rem;
-  margin-inline: auto;
-  padding: var(--sp-7) var(--sp-5);
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
-
-/* ---- page furniture. Minimal on purpose: the study is the subject,
-   and this is the part most likely to be thrown away in the rebrand. ---- */
 
 .skip-link {
   position: fixed;
@@ -99,8 +120,9 @@ body {
   left: var(--sp-2);
   z-index: 100;
   padding: var(--sp-2) var(--sp-3);
-  background: var(--ink);
-  color: var(--bg);
+  border-radius: var(--radius-sm);
+  background: var(--biro);
+  color: #fff;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   transform: translateY(-300%);
@@ -109,97 +131,87 @@ body {
   transform: none;
 }
 
-.eyebrow {
-  margin: 0 0 var(--sp-3);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--muted);
+/* The app sits in the middle of the screen. The bottom bar is fixed, so
+   the column reserves its height rather than sliding under it. */
+.wrap {
+  width: 100%;
+  max-width: 34rem;
+  min-height: 100dvh;
+  margin-inline: auto;
+  padding: var(--sp-6) var(--sp-5) calc(var(--bar-h) + var(--sp-6));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 h1 {
-  margin: 0 0 var(--sp-5);
-  font-size: clamp(1.9rem, 1.2rem + 2.6vw, 3rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  text-wrap: balance;
+  margin: 0 0 var(--sp-4);
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
+  font-weight: 700;
+  line-height: 0.95;
 }
 
-.lede {
-  max-width: 44rem;
-  margin: 0 0 var(--sp-4);
-  color: var(--muted);
-  text-wrap: pretty;
+/* The highlighter swipe. The same gesture a completed row gets, so the
+   title teaches the mark before the list uses it. Multiply so the text
+   stays ink rather than being knocked out. */
+.hl {
+  position: relative;
+  z-index: 0;
+  white-space: nowrap;
 }
-
-.notes {
-  max-width: 44rem;
-  margin-top: var(--sp-7);
-  padding-top: var(--sp-5);
-  border-top: 1px solid var(--line);
-}
-.notes h2 {
-  margin: 0 0 var(--sp-3);
-  font-size: var(--text-md);
-  font-family: var(--font-mono);
-  font-weight: 500;
-  color: var(--muted);
-}
-.notes p {
-  margin: 0 0 var(--sp-4);
-  font-size: var(--text-sm);
-  color: var(--muted);
-  text-wrap: pretty;
+.hl::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -0.06em;
+  right: -0.06em;
+  top: 0.28em;
+  bottom: 0.12em;
+  background: var(--hilite);
+  mix-blend-mode: multiply;
+  /* Uneven corners: a swipe of a chisel tip does not end square. */
+  border-radius: 3px 10px 4px 12px / 10px 3px 12px 4px;
+  transform: rotate(-0.6deg);
 }
 
 /* ============================================================
-   /lab/rows · interaction study
-   The list is the specimen; the page is the microscope. Rules:
-   motion is transform and opacity only (position changes are
-   FLIP glides driven from RowsStudy.tsx), and every duration
-   is a base value times --t, which the 0.25x toggle sets to 4.
-   Rows are driven by data-state (idle / entering / leaving /
-   done). Stage 2 adds exactly two signature moments on those
-   hooks: add sprouts (data-enter="sprout") and delete crumples
-   into a transient bin (data-kind="crumple"). Those use
-   @keyframes, which is allowed here because sprout overlays and
-   crumple ghosts are one-shot elements that mount, play once
-   and unmount; the transitions-only rule is for elements the
-   user can retrigger.
+   the list
+   Motion is transform and opacity only — position changes are
+   FLIP glides driven from RowsStudy.tsx, nothing animates
+   height. Every duration is a base (--b-*) times --t, and the
+   bottom bar writes both as inline custom properties on
+   .rows-study, so the sliders retime the whole app without a
+   second set of rules anywhere.
    ============================================================ */
 
 .rows-study {
-  /* The single speed dial. Everything below multiplies by it. */
+  /* Defaults. The controls overwrite these inline; they live here so the
+     app is correct before the first paint and if JS never runs. */
   --t: 1;
-  /* Curves lifted from studying rows.gg's stylesheet. */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* enter, the default   */
-  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1); /* FLIP settles         */
-  --ease-spring: cubic-bezier(0.22, 1.4, 0.36, 1); /* the one overshoot */
-  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1); /* on-screen movement */
-  --ease-gravity: cubic-bezier(0.4, 0, 0.7, 0.2); /* falling away, Stage 2 */
-  --d-press: calc(120ms * var(--t));
-  --d-hover: calc(150ms * var(--t));
-  --d-enter: calc(220ms * var(--t));
-  --d-leave: calc(180ms * var(--t));
-  --d-settle: calc(260ms * var(--t));
-  --d-reorder: calc(200ms * var(--t));
-  margin-top: var(--sp-7);
-}
-.rows-study[data-slow="true"] {
-  --t: 4;
-}
+  --b-press: 90ms;
+  --b-hover: 110ms;
+  --b-enter: 150ms;
+  --b-leave: 140ms;
+  --b-settle: 190ms;
+  --b-reorder: 165ms;
+  --b-draw: 220ms;
+  --b-highlight: 160ms;
 
-.rows-bench {
-  display: grid;
-  gap: var(--sp-5);
-  align-items: start;
-}
-@media (min-width: 56rem) {
-  .rows-bench {
-    grid-template-columns: minmax(0, 1fr) 19rem;
-  }
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-spring: cubic-bezier(0.22, 1.4, 0.36, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.9, 0.4);
+  /* The movement curve, swapped by the select in the bottom bar. */
+  --ease-move: cubic-bezier(0.2, 1.15, 0.35, 1);
+
+  --d-press: calc(var(--b-press) * var(--t));
+  --d-hover: calc(var(--b-hover) * var(--t));
+  --d-enter: calc(var(--b-enter) * var(--t));
+  --d-leave: calc(var(--b-leave) * var(--t));
+  --d-settle: calc(var(--b-settle) * var(--t));
+  --d-reorder: calc(var(--b-reorder) * var(--t));
+  --d-draw: calc(var(--b-draw) * var(--t));
+  --d-highlight: calc(var(--b-highlight) * var(--t));
 }
 
 /* ---- add form ---- */
@@ -217,10 +229,12 @@ h1 {
 }
 .rows-input {
   width: 100%;
-  padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-2);
+  border: 0;
+  /* A line to write on, not a box. */
+  border-bottom: 2px solid var(--line);
+  border-radius: 0;
+  background: none;
   font: inherit;
   font-size: var(--text-md);
   color: var(--ink);
@@ -231,13 +245,20 @@ h1 {
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-input:hover {
-    border-color: var(--line-strong);
+    border-color: var(--muted);
   }
+}
+.rows-input:focus {
+  outline: none;
+  border-color: var(--biro);
 }
 .rows-input-kbd {
   position: absolute;
   right: var(--sp-2);
   top: 50%;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
   transform: translateY(-50%);
   transition: opacity var(--d-hover) ease;
 }
@@ -246,22 +267,28 @@ h1 {
   opacity: 0;
 }
 .rows-add-btn {
-  padding: var(--sp-2) var(--sp-3);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  padding: var(--sp-2) var(--sp-4);
+  border: 2px solid var(--ink);
+  /* Hand-drawn corners: uneven radii on both axes so no two corners
+     match. One declaration, and the button stops looking CSS-drawn. */
+  border-radius: 6px 14px 8px 16px / 14px 6px 16px 8px;
+  background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--ink);
   cursor: pointer;
   transition:
-    border-color var(--d-hover) ease,
     background-color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-out);
+    border-color var(--d-hover) ease,
+    color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-spring);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-add-btn:hover {
-    background: var(--wash);
+    background: var(--marker);
+    border-color: var(--marker);
+    color: #fff;
+    transform: rotate(-1.5deg) scale(1.03);
   }
 }
 
@@ -269,14 +296,15 @@ h1 {
 
 .rows-listbox {
   position: relative;
-  margin-top: var(--sp-3);
+  margin-top: var(--sp-4);
 }
 .rows-list {
   position: relative; /* ghosts pin against this box */
   list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
   min-height: 3.25rem;
 }
 .rows-list[data-drag-active] {
@@ -284,57 +312,105 @@ h1 {
   -webkit-user-select: none;
 }
 
+/* A row is not a card: no border, no visible container. Just a checkbox,
+   the text, and a ruled line underneath.
+
+   It IS opaque, though, and that is load-bearing rather than decorative.
+   A deleting row leaves the flow and fades where it stood while its
+   neighbours glide up over that space. When rows were transparent you
+   could see the fading ghost straight through the rows sliding over it
+   and the two smeared together. An opaque background the same colour as
+   the page is invisible at rest and occludes the ghost completely — the
+   list simply closes over the deleted row. Paired with the z-index pair
+   further down. */
 .rows-row {
-  position: relative; /* lets data-dragging lift with z-index */
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr) auto;
   align-items: center;
   gap: var(--sp-1);
-  min-height: 3rem;
-  padding-inline: var(--sp-2) var(--sp-1);
-  border: 1px solid var(--line);
+  min-height: 2.875rem;
+  padding-inline: 0 var(--sp-1);
   border-radius: var(--radius-sm);
-  background: var(--surface);
-  /* transform here is the enter timing: FLIP glides and drag releases
-     set their own inline transitions and win over this. */
+  background: var(--bg);
   transition:
     transform var(--d-enter) var(--ease-spring),
     opacity var(--d-enter) var(--ease-out),
-    border-color var(--d-hover) ease,
-    box-shadow var(--d-hover) ease;
-}
-@media (hover: hover) and (pointer: fine) {
-  .rows-row:hover {
-    border-color: var(--line-strong);
-  }
-}
-.rows-row[data-dragging] {
-  z-index: 2;
-  border-color: var(--line-strong);
-  box-shadow: var(--shadow);
-  cursor: grabbing;
+    background-color var(--d-hover) ease;
 }
 
-/* The Stage 2 seams. Entering rows occupy their space immediately (they
-   are in flow) and animate opacity/transform in; leaving rows are out of
-   flow at once, pinned to their last box, fading where they stood. */
-.rows-row[data-state="entering"] {
-  opacity: 0;
-  transform: translateY(-0.375rem) scale(0.98);
-}
-.rows-row[data-state="leaving"] {
+/* The rule. It replaces the card border as the thing that gives the list
+   structure, and it is also the surface the add animation draws on. */
+.rows-row::after {
+  content: "";
   position: absolute;
   left: 0;
   right: 0;
-  z-index: 1;
-  pointer-events: none;
-  transition:
-    opacity var(--d-leave) var(--ease-out),
-    transform var(--d-leave) var(--ease-out);
+  bottom: 0;
+  height: 1.5px;
+  background: var(--line);
+  transform-origin: left center;
+  transition: background-color var(--d-hover) ease;
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .rows-row:hover {
+    background: var(--wash);
+  }
+  /* The rule under the hovered row picks up the pen colour: the smallest
+     possible "this one". */
+  .rows-row:hover::after {
+    background: var(--marker);
+  }
+}
+
+/* Dragging is the one time a row becomes an object: it lifts off the
+   page, gains a shadow, and its rule goes, because a rule belongs to the
+   page and this row is no longer on it. */
+.rows-row[data-dragging] {
+  z-index: 3;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  cursor: grabbing;
+}
+.rows-row[data-dragging]::after {
+  opacity: 0;
+}
+
+.rows-row[data-state="entering"] {
+  opacity: 0;
+  transform: translateY(-0.25rem);
+}
+
+/* Leaving rows go out of flow at once, pinned to their last box, so
+   their neighbours close the gap by FLIP while the ghost plays where it
+   stood. z-index 0 puts it UNDER the live rows (which are z-index 1 and
+   opaque), so the closing list wipes over it instead of blending with
+   it. */
+.rows-row[data-state="leaving"] {
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  background: none;
+  /* Opacity is deliberately quicker than the movement: the row should be
+     visually gone well before its neighbours finish arriving. */
+  transition:
+    opacity calc(var(--d-leave) * 0.65) var(--ease-out),
+    transform var(--d-leave) var(--ease-in);
+}
+.rows-row[data-state="leaving"]::after {
+  opacity: 0;
+}
+/* Delete: flicked off the page. Accelerating away, a little to the left,
+   a couple of degrees of rotation so it reads as swept rather than
+   dissolved. One transition, fully interruptible: a burst of deletes is
+   a burst of independent ghosts and nothing queues. */
 .rows-row[data-state="leaving"][data-out] {
   opacity: 0;
-  transform: translateY(-0.375rem) scale(0.985);
+  transform: translateX(-1.5rem) rotate(-2.5deg) scale(0.96);
 }
 
 /* ---- row internals ---- */
@@ -343,13 +419,15 @@ h1 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
+  width: 1.25rem;
   height: 2.5rem;
   color: var(--muted);
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: grab;
   touch-action: none; /* the grip is the touch drag surface */
-  transition: opacity var(--d-hover) ease;
+  transition:
+    opacity var(--d-hover) ease,
+    transform var(--d-hover) var(--ease-out);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-grip {
@@ -358,68 +436,76 @@ h1 {
   .rows-row:hover .rows-grip,
   .rows-row:focus .rows-grip,
   .rows-row:focus-within .rows-grip {
-    opacity: 0.5;
+    opacity: 0.45;
+  }
+  .rows-grip:hover {
+    opacity: 0.9;
+    transform: scale(1.15);
   }
 }
 .rows-row[data-dragging] .rows-grip {
   cursor: grabbing;
+  opacity: 0.9;
 }
 
 .rows-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
   padding: 0;
   background: none;
   border: none;
   cursor: pointer;
-  transition: transform var(--d-press) var(--ease-out);
 }
+/* The hand-drawn box: uneven radii on both axes and a degree and a half
+   of rotation. Nothing here is an image, so it scales and recolours with
+   the tokens like everything else. */
 .rows-check-box {
   display: grid;
   place-items: center;
-  width: 1.125rem;
-  height: 1.125rem;
-  border: 1px solid var(--line-strong);
-  /* concentric with the row: row radius 6 minus the inset */
-  border-radius: 4px;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--ink);
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
+  transform: rotate(-1.5deg);
   transition:
-    background-color var(--d-hover) ease,
+    transform var(--d-hover) var(--ease-spring),
     border-color var(--d-hover) ease;
 }
 @media (hover: hover) and (pointer: fine) {
+  /* Tilts the other way and grows: the box reacts before it is pressed. */
   .rows-check:hover .rows-check-box {
-    border-color: var(--muted);
+    border-color: var(--marker);
+    transform: rotate(2deg) scale(1.12);
   }
 }
-.rows-row[data-state="done"] .rows-check-box,
-.rows-row[data-done="true"] .rows-check-box {
-  background: var(--accent-ink);
-  border-color: var(--accent-ink);
+.rows-check:active .rows-check-box {
+  transform: rotate(-1.5deg) scale(0.88);
 }
 .rows-check svg {
   display: block;
+  overflow: visible;
 }
+/* The tick is drawn in marker red over the ink box, the way you would
+   actually tick a printed list — the box itself is not repainted. */
 .rows-check path {
-  stroke: var(--bg);
+  stroke: var(--marker);
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  /* uncheck is quicker than check: exits are faster than enters */
-  transition: stroke-dashoffset calc(120ms * var(--t)) var(--ease-out);
+  transition: stroke-dashoffset var(--d-press) var(--ease-out);
 }
 .rows-row[data-state="done"] .rows-check path,
 .rows-row[data-done="true"] .rows-check path {
   stroke-dashoffset: 0;
-  transition: stroke-dashoffset var(--d-enter) var(--ease-out)
-    calc(40ms * var(--t));
+  transition: stroke-dashoffset var(--d-enter) var(--ease-out);
 }
 
 .rows-title {
   justify-self: start;
   max-width: 100%;
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-1);
   background: none;
   border: none;
   font: inherit;
@@ -431,7 +517,12 @@ h1 {
   cursor: text;
   transition:
     color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-out);
+    transform var(--d-hover) var(--ease-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-row:hover .rows-title {
+    transform: translateX(2px);
+  }
 }
 .rows-row[data-state="done"] .rows-title,
 .rows-row[data-done="true"] .rows-title {
@@ -439,31 +530,56 @@ h1 {
 }
 .rows-title-text {
   position: relative;
+  z-index: 0;
   display: inline-block;
 }
-/* The strike is a transform-only wipe, drawn left to right, slightly
-   after the check so the two read as cause and effect. */
+
+/* Complete: a highlighter swipe, with the strike following 50ms behind
+   so the two read as one gesture with follow-through rather than as two
+   effects firing at once. Both are transform-only wipes from the left. */
+.rows-title-text::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -0.15em;
+  right: -0.15em;
+  top: 0.02em;
+  bottom: 0.02em;
+  background: var(--hilite);
+  mix-blend-mode: multiply;
+  border-radius: 2px 6px 3px 7px / 6px 2px 7px 3px;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform var(--d-press) var(--ease-out);
+}
+.rows-row[data-state="done"] .rows-title-text::before,
+.rows-row[data-done="true"] .rows-title-text::before {
+  transform: scaleX(1);
+  transition: transform var(--d-highlight) var(--ease-out);
+}
 .rows-title-text::after {
   content: "";
   position: absolute;
   left: -0.05em;
   right: -0.05em;
-  top: 50%;
-  height: 1px;
-  background: currentColor;
+  top: 55%;
+  height: 1.5px;
+  background: var(--ink);
+  opacity: 0.55;
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform calc(120ms * var(--t)) var(--ease-out);
+  transition: transform var(--d-press) var(--ease-out);
 }
 .rows-row[data-state="done"] .rows-title-text::after,
 .rows-row[data-done="true"] .rows-title-text::after {
   transform: scaleX(1);
-  transition: transform var(--d-enter) var(--ease-out) calc(60ms * var(--t));
+  transition: transform var(--d-highlight) var(--ease-out)
+    calc(50ms * var(--t));
 }
 
 .rows-edit {
   width: 100%;
-  padding: var(--sp-2);
+  padding: var(--sp-2) var(--sp-1);
   font: inherit;
   font-size: var(--text-md);
   line-height: 1.4;
@@ -471,16 +587,15 @@ h1 {
   background: none;
   border: none;
   outline: none;
-  /* the focus cue, without a layout-shifting border */
-  box-shadow: 0 1px 0 var(--accent-ink);
+  box-shadow: 0 1.5px 0 var(--biro);
 }
 
 .rows-del {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
   padding: 0;
   background: none;
   border: none;
@@ -490,7 +605,7 @@ h1 {
   transition:
     opacity var(--d-hover) ease,
     color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-out);
+    transform var(--d-hover) var(--ease-spring);
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-del {
@@ -501,8 +616,48 @@ h1 {
   .rows-row:focus-within .rows-del {
     opacity: 1;
   }
+  /* A quarter turn into the marker colour: the control telegraphs itself
+     before you commit to it. */
   .rows-del:hover {
-    color: var(--ink);
+    color: var(--marker);
+    transform: rotate(90deg) scale(1.15);
+  }
+}
+.rows-del:active {
+  transform: rotate(90deg) scale(0.9);
+}
+
+/* Add: the row's ruled line sweeps in from the left in marker red and
+   settles to the neutral line colour, while the contents fade up behind
+   it. Keyframes rather than a transition because this is a one-shot on a
+   freshly mounted element, and it resolves to each element's own
+   underlying value (there is no 100% frame), so the hover-hidden delete
+   control still ends hidden. */
+.rows-row[data-enter="draw"] {
+  opacity: 1;
+  transform: none;
+  pointer-events: none; /* its controls are not real yet */
+}
+.rows-row[data-enter="draw"]::after {
+  animation: rows-rule-draw var(--d-draw) var(--ease-out);
+}
+@keyframes rows-rule-draw {
+  0% {
+    transform: scaleX(0);
+    background: var(--marker);
+  }
+  70% {
+    background: var(--marker);
+  }
+}
+.rows-row[data-enter="draw"] > * {
+  animation: rows-write-on var(--d-draw) var(--ease-out);
+}
+@keyframes rows-write-on {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translateY(2px);
   }
 }
 
@@ -513,9 +668,9 @@ h1 {
   inset: 0;
   display: flex;
   align-items: center;
-  padding-inline: var(--sp-3);
-  border: 1px dashed var(--line-strong);
-  border-radius: var(--radius-sm);
+  padding-inline: var(--sp-2);
+  border: 2px dashed var(--line);
+  border-radius: 8px 16px 10px 18px / 16px 8px 18px 10px;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--muted);
@@ -530,9 +685,9 @@ h1 {
   background: none;
   border: none;
   font: inherit;
-  color: var(--ink);
+  color: var(--marker);
   text-decoration: underline;
-  text-decoration-thickness: 1px;
+  text-decoration-thickness: 1.5px;
   text-underline-offset: 0.2em;
   cursor: pointer;
 }
@@ -555,10 +710,10 @@ h1 {
   align-items: center;
   gap: var(--sp-1);
   margin-left: auto;
-  padding: 0.125rem var(--sp-2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+  padding: 0.2rem var(--sp-2);
+  border: 1.5px solid var(--ink);
+  border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--ink);
@@ -566,7 +721,8 @@ h1 {
   transition:
     opacity var(--d-hover) ease,
     background-color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-out);
+    color var(--d-hover) ease,
+    transform var(--d-press) var(--ease-spring);
 }
 .rows-undo[aria-hidden="true"] {
   opacity: 0;
@@ -574,438 +730,257 @@ h1 {
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-undo:hover {
-    background: var(--wash);
+    background: var(--ink);
+    color: var(--paper);
+    transform: rotate(-1deg) scale(1.04);
   }
 }
-
-/* ---- the readout panel ---- */
-
-.rows-readout {
-  position: sticky;
-  top: calc(var(--header-h) + var(--sp-5));
-  padding: var(--sp-4);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-.rows-readout-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-}
-.rows-slow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-1);
-  padding: 0.125rem var(--sp-2);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
+.rows-status kbd,
+.rows-empty kbd {
   font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    background-color var(--d-hover) ease,
-    color var(--d-hover) ease,
-    border-color var(--d-hover) ease,
-    transform var(--d-press) var(--ease-out);
-}
-.rows-slow[aria-pressed="true"] {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--bg);
-}
-
-.rows-log-wrap {
-  min-height: 9rem;
-  margin-top: var(--sp-3);
-}
-.rows-log {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-variant-numeric: tabular-nums;
   color: var(--ink);
 }
-.rows-log li {
-  overflow-wrap: anywhere;
-  transition:
-    opacity var(--d-hover) ease,
-    transform var(--d-enter) var(--ease-out);
-}
-/* Older entries fade down the stack: a depth cue, not a decoration. */
-.rows-log li:nth-child(2) {
-  opacity: 0.72;
-}
-.rows-log li:nth-child(3) {
-  opacity: 0.52;
-}
-.rows-log li:nth-child(4) {
-  opacity: 0.36;
-}
-.rows-log li:nth-child(5) {
-  opacity: 0.24;
-}
-.rows-log li[data-fresh] {
-  opacity: 0;
-  transform: translateY(-0.25rem);
-}
-.rows-log-empty {
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted);
-  max-width: 16rem;
-  text-wrap: pretty;
-}
 
-.rows-keys {
-  margin-top: var(--sp-4);
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--line);
-}
-.rows-keys dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.375rem var(--sp-3);
-  align-items: baseline;
-  margin-top: var(--sp-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--muted);
-}
-.rows-keys dl > div {
-  display: contents;
-}
-.rows-keys dd {
-  margin: 0;
-}
+/* ============================================================
+   the bottom bar
+   Two drawers — timings and keys — over a permanently visible
+   strip. Fixed to the bottom so the list stays centred and the
+   controls never push the app around.
+   ============================================================ */
 
-/* ---- signature moment 1: add = seed to sprout, 380ms ----
-   One timeline, keyed by percentages: the seed falls out of the input
-   with gravity easing (0-45%), lands with one small bounce (45-64%),
-   the stem and one leaf draw via stroke-dashoffset (45-88%), and the
-   row's contents unfurl as the mark fades (60-100%). The row box is in
-   flow at full height from frame one, so nothing below it reflows; only
-   its contents and the overlay animate. */
-
-.rows-row[data-state="entering"][data-enter="sprout"] {
-  /* the sprout row is visible scenery, not a hidden Stage 1 enter */
-  opacity: 1;
-  transform: none;
-  /* its controls are not real yet */
-  pointer-events: none;
-  animation: rows-box-in calc(380ms * var(--t)) var(--ease-out);
-}
-@keyframes rows-box-in {
-  0% {
-    opacity: 0;
-  }
-  22% {
-    opacity: 1;
-  }
-}
-
-/* Contents hidden until the stem is most of the way up, then unfurled.
-   No 100% frame on purpose: the animation resolves to each element's
-   own underlying value, so the hover-hidden delete control ends hidden
-   while everything else ends visible. */
-.rows-row[data-enter="sprout"] > :not(.rows-sprout) {
-  animation: rows-unfurl calc(380ms * var(--t)) var(--ease-spring);
-}
-@keyframes rows-unfurl {
-  0%,
-  60% {
-    opacity: 0;
-    transform: translateY(3px) scale(0.985);
-  }
-}
-
-.rows-sprout {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: calc(var(--sp-2) + 1.5rem); /* the checkbox slot */
-  width: 2.5rem;
-  pointer-events: none;
-  animation: rows-sprout-life calc(380ms * var(--t)) linear both;
-}
-@keyframes rows-sprout-life {
-  0%,
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-.rows-sprout svg {
-  position: absolute;
-  inset: 0;
-  margin: auto;
-  display: block;
-}
-.rows-seed {
-  position: absolute;
-  left: calc(50% - 2.5px);
-  top: calc(50% + 3.5px);
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink);
-  animation: rows-seed calc(380ms * var(--t)) both;
-}
-/* Trap: inside @keyframes, Chromium ignores var() in
-   animation-timing-function, silently falling back to "ease". Every
-   per-frame curve below is therefore a literal; they mirror the
-   --ease-* tokens above. */
-@keyframes rows-seed {
-  0% {
-    opacity: 0;
-    transform: translateY(-56px);
-    animation-timing-function: cubic-bezier(0.4, 0, 0.7, 0.2); /* gravity */
-  }
-  10% {
-    opacity: 1;
-  }
-  45% {
-    transform: translateY(0);
-    animation-timing-function: ease-out;
-  }
-  55% {
-    transform: translateY(-2.5px);
-    animation-timing-function: ease-in;
-  }
-  64%,
-  100% {
-    transform: translateY(0);
-  }
-}
-.rows-sprout path {
-  fill: none;
-  stroke: var(--accent-ink);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-.rows-stem {
-  animation: rows-stem calc(380ms * var(--t)) both;
-}
-@keyframes rows-stem {
-  0%,
-  45% {
-    stroke-dashoffset: 1;
-    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); /* expo */
-  }
-  82%,
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-.rows-leaf {
-  animation: rows-leaf calc(380ms * var(--t)) both;
-}
-@keyframes rows-leaf {
-  0%,
-  64% {
-    stroke-dashoffset: 1;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); /* out */
-  }
-  88%,
-  100% {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* ---- signature moment 2: delete = crumple into the bin, 400ms ----
-   The ghost is two clipped copies of the row face folding toward each
-   other in 3D (0-38%), then the folded ball tumbles to the bin with
-   gravity easing (38-100%), fading only at the very end so it reads as
-   dropping in. --fall-x/--fall-y are set per ghost from real layout
-   measurements in RowsStudy.tsx. */
-
-.rows-ghost {
-  position: absolute;
+.bar {
+  position: fixed;
   left: 0;
   right: 0;
-  z-index: 1;
-  pointer-events: none;
-  perspective: 700px;
-}
-.rows-fold {
-  position: absolute;
-  inset: 0;
-  transform-style: preserve-3d;
-  will-change: transform, opacity;
-  animation: rows-crumple calc(400ms * var(--t)) both;
-}
-@keyframes rows-crumple {
-  0% {
-    transform: none;
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); /* inout */
-  }
-  38% {
-    transform: translateY(-3px) scale(0.86) rotate(-3deg);
-    opacity: 1;
-    animation-timing-function: cubic-bezier(0.4, 0, 0.7, 0.2); /* gravity */
-  }
-  90% {
-    opacity: 1;
-    animation-timing-function: linear;
-  }
-  100% {
-    transform: translate(var(--fall-x, 0px), var(--fall-y, 80px))
-      rotateX(35deg) rotate(16deg) scale(0.18);
-    opacity: 0;
-  }
-}
-.rows-fold-half {
-  position: absolute;
-  top: 0;
   bottom: 0;
-  width: 50%;
-  overflow: hidden;
-}
-.rows-fold-half[data-half="l"] {
-  left: 0;
-  transform-origin: 100% 50%;
-  animation: rows-fold-l calc(400ms * var(--t)) var(--ease-inout) both;
-}
-.rows-fold-half[data-half="r"] {
-  left: 50%;
-  transform-origin: 0% 50%;
-  animation: rows-fold-r calc(400ms * var(--t)) var(--ease-inout) both;
-}
-@keyframes rows-fold-l {
-  0% {
-    transform: rotateY(0deg);
-  }
-  38%,
-  100% {
-    transform: rotateY(-70deg);
-  }
-}
-@keyframes rows-fold-r {
-  0% {
-    transform: rotateY(0deg);
-  }
-  38%,
-  100% {
-    transform: rotateY(70deg);
-  }
-}
-/* Each half shows one half of a full-width row face. */
-.rows-fold-half .rows-fold-face {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 200%;
-}
-.rows-fold-half[data-half="r"] .rows-fold-face {
-  left: -100%;
+  z-index: 50;
+  background: var(--paper);
+  border-top: 1.5px solid var(--line);
 }
 
-/* The bin: hairline marks in the page ink, not an illustration. Its
-   status-line slot is permanent so appearing never shifts layout. */
-.rows-bin {
-  display: inline-flex;
+.bar-strip {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  color: var(--ink);
-  opacity: 0;
-  transition: opacity var(--d-hover) ease;
+  gap: var(--sp-3);
+  height: var(--bar-h);
+  max-width: 48rem;
+  margin-inline: auto;
+  padding-inline: var(--sp-4);
 }
-.rows-bin[data-shown] {
-  opacity: 1;
+.bar-tabs {
+  display: flex;
+  gap: var(--sp-2);
+  margin-left: auto;
 }
-.rows-bin path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.bar-tab {
+  padding: 0.25rem var(--sp-3);
+  border: 1.5px solid var(--line);
+  border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--d-hover, 110ms) ease,
+    border-color var(--d-hover, 110ms) ease,
+    background-color var(--d-hover, 110ms) ease,
+    transform var(--d-press, 90ms) var(--ease-spring, ease);
 }
-.rows-bin-lid {
-  transform-box: fill-box;
-  transform-origin: 0% 100%;
-  transition: transform calc(140ms * var(--t)) var(--ease-out);
+@media (hover: hover) and (pointer: fine) {
+  .bar-tab:hover {
+    color: var(--ink);
+    border-color: var(--ink);
+    transform: rotate(-1deg) scale(1.03);
+  }
 }
-.rows-bin[data-lid] .rows-bin-lid {
-  transform: rotate(-22deg) translateY(-0.5px);
+.bar-tab[aria-expanded="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
 }
 
-/* ---- press feedback: every pressable control ---- */
-.rows-check:active,
-.rows-del:active,
+/* The always-visible speed control: the one dial worth reaching for
+   without opening anything. */
+.bar-speed {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.bar-speed input[type="range"] {
+  width: 7rem;
+}
+.bar-speed output {
+  min-width: 2.75rem;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar-drawer {
+  max-width: 48rem;
+  margin-inline: auto;
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1.5px dashed var(--line);
+}
+
+.ctrls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+}
+.ctrl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0 var(--sp-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.ctrl output {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.ctrl input,
+.ctrl select {
+  grid-column: 1 / -1;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--marker);
+  cursor: pointer;
+}
+
+.ctrl select {
+  margin-top: 0.15rem;
+  padding: 0.2rem var(--sp-2);
+  border: 1.5px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.bar-reset {
+  margin-top: var(--sp-3);
+  padding: 0.2rem var(--sp-3);
+  border: 1.5px solid var(--line);
+  border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--d-hover, 110ms) ease,
+    border-color var(--d-hover, 110ms) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .bar-reset:hover {
+    color: var(--marker);
+    border-color: var(--marker);
+  }
+}
+
+/* ---- the shortcuts legend ---- */
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.keys > div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+}
+.keys dd {
+  margin: 0;
+}
+.keys kbd {
+  display: inline-block;
+  min-width: 1.25rem;
+  padding: 0.1rem 0.35rem;
+  border: 1.5px solid var(--line);
+  border-radius: 3px 6px 4px 7px / 6px 3px 7px 4px;
+  background: var(--paper);
+  font-family: var(--font-mono);
+  color: var(--ink);
+  text-align: center;
+}
+
+/* ---- press feedback ---- */
 .rows-title:active,
 .rows-add-btn:active,
-.rows-slow:active,
 .rows-undo:active,
+.bar-tab:active,
 .rows-empty button:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 /* ---- reduced motion: fewer and gentler, not zero ----
-   Opacity crossfades stay; every translate and scale goes. The JS half
-   of this lives in RowsStudy.tsx (matchMedia), because this block cannot
-   stop a script from setting element.style.transform. */
+   Opacity crossfades stay; every translate, scale and rotate goes. The
+   JS half of this lives in RowsStudy.tsx (matchMedia), because this
+   block cannot stop a script from setting element.style.transform. */
 @media (prefers-reduced-motion: reduce) {
   .rows-study .rows-row {
-    transition-property: opacity, border-color, box-shadow, background-color;
+    transition-property: opacity, background-color;
   }
   .rows-study .rows-row[data-state="entering"] {
     transform: none;
   }
+  /* Delete collapses to a plain crossfade: no flick, no rotation. */
   .rows-study .rows-row[data-state="leaving"][data-out] {
     transform: none;
   }
-  .rows-study .rows-log li {
-    transition-property: opacity;
+  .rows-study .rows-row[data-enter="draw"]::after,
+  .rows-study .rows-row[data-enter="draw"] > * {
+    animation: none;
   }
-  .rows-study .rows-log li[data-fresh] {
+  .rows-study .rows-check-box,
+  .rows-study .rows-check:hover .rows-check-box,
+  .rows-study .rows-check:active .rows-check-box,
+  .rows-study .rows-grip:hover,
+  .rows-study .rows-del:hover,
+  .rows-study .rows-del:active,
+  .rows-study .rows-row:hover .rows-title {
     transform: none;
   }
   .rows-study .rows-check path {
     transition: none;
   }
+  /* The highlighter and the strike stop wiping and simply appear. */
+  .rows-study .rows-title-text::before,
   .rows-study .rows-title-text::after {
     transform: none;
     opacity: 0;
     transition: opacity calc(150ms * var(--t)) ease;
   }
-  .rows-study .rows-row[data-state="done"] .rows-title-text::after,
-  .rows-study .rows-row[data-done="true"] .rows-title-text::after {
+  .rows-study .rows-row[data-state="done"] .rows-title-text::before,
+  .rows-study .rows-row[data-done="true"] .rows-title-text::before {
     opacity: 1;
   }
+  .rows-study .rows-row[data-state="done"] .rows-title-text::after,
+  .rows-study .rows-row[data-done="true"] .rows-title-text::after {
+    opacity: 0.55;
+  }
   .rows-study button:active,
-  .rows-study .rows-title:active {
-    transform: none;
-  }
-  /* Both signature moments collapse to a plain opacity crossfade. The
-     script already routes to the fade variants under this media query;
-     these guards make the stylesheet agree even if a sprout or crumple
-     element ever renders (the safety timers then retire it). */
-  .rows-study .rows-sprout {
-    display: none;
-  }
-  .rows-study .rows-row[data-enter="sprout"],
-  .rows-study .rows-row[data-enter="sprout"] > :not(.rows-sprout),
-  .rows-study .rows-fold,
-  .rows-study .rows-fold-half {
-    animation: none;
-  }
-  .rows-study .rows-bin[data-lid] .rows-bin-lid {
+  .rows-study .rows-title:active,
+  .bar-tab:hover,
+  .bar-tab:active {
     transform: none;
   }
 }
-
-

@@ -68,12 +68,15 @@ it has failed.
 Motion and GSAP were both considered and rejected, after the no-dependencies rule
 was explicitly lifted for this project. The deciding argument:
 
-**The 0.25x slow-motion toggle is incompatible with springs, and the toggle is the
-best thing in the piece.** It works because every duration is a number multiplied by
-`--t`. A spring has no duration; slowing one means changing stiffness and damping,
-which alters its *character*, not just its speed. What you inspected at quarter
-speed would no longer be what plays at full speed, so the toggle would become a lie.
-The toggle plus the readout are what make this a study rather than a to-do app.
+**The speed control is incompatible with springs, and it is the best thing in the
+piece.** It works because every duration is a number multiplied by `--t`. A spring
+has no duration; slowing one means changing stiffness and damping, which alters its
+*character*, not just its speed. What you inspected at quarter speed would no longer
+be what plays at full speed, so the control would become a lie.
+
+This decision **survived** the removal of the readout, and is now load-bearing in a
+stronger way: the whole bottom bar is duration-based. Every slider writes a `--b-*`
+base value and the speed slider writes `--t`; springs would have nothing to write.
 
 Supporting points:
 
@@ -90,11 +93,21 @@ Supporting points:
 **Revisit only if** burst-testing shows stutter that `composite: "add"` cannot fix.
 That is a testable claim; test it rather than assuming.
 
-### The readout must stay honest
+### ~~The readout must stay honest~~ · SUPERSEDED 2026-07-20
 
-The readout naming each transition, its duration and its curve is what proves the
-motion was chosen rather than accepted from a default. If a change makes the readout
-vaguer (a label like "spring" instead of real values), the change is wrong.
+The readout panel is **gone**, along with the lede and the "how it moves, honestly"
+notes. Giacomo's instruction: "even though this is an experiment, I don't want the
+research around it. I just want the app, no paragraphs, no readouts."
+
+Do not reinstate any of it. The app is now a to-do list centred on the page with a
+bottom bar; the bar is where the study survives, as controls rather than commentary.
+
+What the readout was defending is still defended, differently. Its purpose was to
+prove the motion was *chosen* rather than accepted from a default. The timing
+drawer now does that better by making every value adjustable and visible: sliders
+for add / complete / delete / reorder / settle / enter, a movement-curve select, and
+a speed multiplier. The old argument holds — if a change makes those controls
+vaguer, or hides a real number behind a label, the change is wrong.
 
 ---
 
