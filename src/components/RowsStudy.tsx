@@ -42,7 +42,10 @@ import {
   useState,
 } from "react";
 
-type Row = { id: string; text: string; done: boolean };
+/* `marked` is the highlighter: emphasis chosen by you, not a state the
+   app infers. Deliberately separate from `done` — see the note in
+   globals.css about why completion must never highlight anything. */
+type Row = { id: string; text: string; done: boolean; marked: boolean };
 /* A leaving row, pinned where it stood while its neighbours close the
    gap. The flick and the reduced-motion crossfade are the same
    transition with the transform dropped by the stylesheet. */
@@ -81,7 +84,8 @@ type MoveKey = keyof typeof MOVE_EASES;
 type Params = {
   speed: number;
   draw: number;
-  highlight: number;
+  complete: number;
+  mark: number;
   leave: number;
   reorder: number;
   settle: number;
@@ -94,7 +98,8 @@ type Params = {
 const DEFAULTS: Params = {
   speed: 1,
   draw: 220,
-  highlight: 160,
+  complete: 160,
+  mark: 160,
   leave: 140,
   reorder: 165,
   settle: 190,
@@ -106,7 +111,8 @@ type DurationKey = Exclude<keyof Params, "speed" | "move">;
 
 const SLIDERS: { key: DurationKey; label: string }[] = [
   { key: "draw", label: "add" },
-  { key: "highlight", label: "complete" },
+  { key: "complete", label: "complete" },
+  { key: "mark", label: "highlight" },
   { key: "leave", label: "delete" },
   { key: "reorder", label: "reorder" },
   { key: "settle", label: "settle" },
@@ -153,6 +159,7 @@ const KEYS: [string, string][] = [
   ["⏎", "edit row"],
   ["esc", "cancel edit"],
   ["space", "complete"],
+  ["h", "highlight"],
   ["⌥ ↑↓", "reorder"],
   ["⌫", "delete"],
   ["⌘z", "undo delete"],
@@ -196,8 +203,36 @@ const Cross = () => (
   </svg>
 );
 
+/* A chisel-tip marker, held at the angle you would hold one. Filled nib
+   in the highlighter colour so the control names its own effect. */
+const MarkerNib = ({ on }: { on: boolean }) => (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <g transform="rotate(-38 8 8)">
+      <rect
+        x="6"
+        y="1.5"
+        width="4"
+        height="6.5"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M6 8.2h4l-.7 3.2a1 1 0 0 1-1 .8h-.6a1 1 0 0 1-1-.8Z"
+        fill={on ? "var(--hilite)" : "none"}
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+    </g>
+  </svg>
+);
+
 /* One face of a row, minus behaviour: used by the leaving ghost so a
-   deleted row looks exactly like the row it was. */
+   deleted row looks exactly like the row it was — including the mark
+   control, or the ghost would be a column narrower than the row it is
+   standing in for and the exit would visibly jump. */
 const GhostFace = ({ row }: { row: Row }) => (
   <>
     <span className="rows-grip" aria-hidden="true">
@@ -210,6 +245,9 @@ const GhostFace = ({ row }: { row: Row }) => (
     </span>
     <span className="rows-title">
       <span className="rows-title-text">{row.text}</span>
+    </span>
+    <span className="rows-mark">
+      <MarkerNib on={row.marked} />
     </span>
     <span className="rows-del">
       <Cross />
@@ -316,7 +354,16 @@ export default function RowsStudy() {
                 typeof (r as Row).text === "string" &&
                 typeof (r as Row).done === "boolean",
             )
-            .map(({ id, text, done }) => ({ id, text, done }));
+            /* `marked` arrived after rows were already in people's
+               storage, so it is read defensively rather than required by
+               the filter above — an older row simply comes back
+               unmarked instead of being discarded. */
+            .map((r) => ({
+              id: r.id,
+              text: r.text,
+              done: r.done,
+              marked: r.marked === true,
+            }));
         }
       }
     } catch {
@@ -324,7 +371,10 @@ export default function RowsStudy() {
     }
     // A stored empty list is respected: the user emptied it on purpose.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setRows(initial ?? SEED.map((text) => ({ id: uid(), text, done: false })));
+    setRows(
+      initial ??
+        SEED.map((text) => ({ id: uid(), text, done: false, marked: false })),
+    );
 
     /* Timings persist too: a tuning you liked should survive a reload.
        Every field is validated individually so a partial or edited blob
@@ -577,7 +627,7 @@ export default function RowsStudy() {
       if (!t) return;
       snap();
       const id = uid();
-      setRows((r) => [{ id, text: t, done: false }, ...r]);
+      setRows((r) => [{ id, text: t, done: false, marked: false }, ...r]);
       if (reduced.current) {
         // Reduced motion: the plain enter, opacity-only under the media
         // query. No rule sweep.
@@ -597,6 +647,19 @@ export default function RowsStudy() {
       const nowDone = !row.done;
       setRows((r) => r.map((x) => (x.id === id ? { ...x, done: nowDone } : x)));
       announce(nowDone ? "row completed" : "row reopened");
+    },
+    [rows, announce],
+  );
+
+  /* Emphasis. No snap() needed: nothing changes size or position, the
+     highlighter just wipes across in place. */
+  const toggleMark = useCallback(
+    (id: string) => {
+      const row = rows.find((r) => r.id === id);
+      if (!row) return;
+      const next = !row.marked;
+      setRows((r) => r.map((x) => (x.id === id ? { ...x, marked: next } : x)));
+      announce(next ? "row highlighted" : "highlight removed");
     },
     [rows, announce],
   );
@@ -666,7 +729,12 @@ export default function RowsStudy() {
 
   const reseed = useCallback(() => {
     snap();
-    const fresh = SEED.map((text) => ({ id: uid(), text, done: false }));
+    const fresh = SEED.map((text) => ({
+      id: uid(),
+      text,
+      done: false,
+      marked: false,
+    }));
     setRows(fresh);
     setEntering(new Set(fresh.map((r) => r.id)));
     announce("sample rows restored");
@@ -781,6 +849,9 @@ export default function RowsStudy() {
     } else if (e.key === " ") {
       e.preventDefault();
       toggleDone(id);
+    } else if (e.key === "h" || e.key === "H") {
+      e.preventDefault();
+      toggleMark(id);
     } else if (e.key === "Backspace" || e.key === "Delete") {
       e.preventDefault();
       deleteRow(id);
@@ -882,7 +953,8 @@ export default function RowsStudy() {
     "--b-settle": `${params.settle}ms`,
     "--b-reorder": `${params.reorder}ms`,
     "--b-draw": `${params.draw}ms`,
-    "--b-highlight": `${params.highlight}ms`,
+    "--b-complete": `${params.complete}ms`,
+    "--b-mark": `${params.mark}ms`,
     "--ease-move": MOVE_EASES[params.move].value,
   } as React.CSSProperties;
 
@@ -953,9 +1025,12 @@ export default function RowsStudy() {
                 data-flip={row.id}
                 data-state={state}
                 data-enter={isDrawing ? "draw" : undefined}
+                data-marked={row.marked ? "true" : undefined}
                 data-dragging={draggingId === row.id ? "true" : undefined}
                 tabIndex={row.id === rovingId ? 0 : -1}
-                aria-label={`${row.text}${row.done ? ", done" : ""}`}
+                aria-label={`${row.text}${row.marked ? ", highlighted" : ""}${
+                  row.done ? ", done" : ""
+                }`}
                 onFocus={() => setFocusId(row.id)}
                 onAnimationEnd={(e) => {
                   // The rule's own sweep ends the draw. The contents
@@ -1023,6 +1098,18 @@ export default function RowsStudy() {
                     <span className="rows-title-text">{row.text}</span>
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="rows-mark"
+                  tabIndex={-1}
+                  aria-pressed={row.marked}
+                  aria-label={
+                    row.marked ? "remove highlight" : "highlight row"
+                  }
+                  onClick={() => toggleMark(row.id)}
+                >
+                  <MarkerNib on={row.marked} />
+                </button>
                 <button
                   type="button"
                   className="rows-del"

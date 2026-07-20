@@ -63,7 +63,7 @@
   --line-strong: #23201c;
 
   --marker: #ff4d3d; /* felt red    — the action colour */
-  --hilite: #ffe600; /* highlighter — done */
+  --hilite: #ffe600; /* highlighter — emphasis, never completion */
   --biro: #2b7fff; /* blue ink    — focus, system */
 
   --accent-ink: var(--marker);
@@ -152,9 +152,9 @@ h1 {
   line-height: 0.95;
 }
 
-/* The highlighter swipe. The same gesture a completed row gets, so the
-   title teaches the mark before the list uses it. Multiply so the text
-   stays ink rather than being knocked out. */
+/* The highlighter swipe on the title. Emphasis — which is the only thing
+   a highlighter should ever mean. Multiply so the text stays ink rather
+   than being knocked out. */
 .hl {
   position: relative;
   z-index: 0;
@@ -196,7 +196,8 @@ h1 {
   --b-settle: 190ms;
   --b-reorder: 165ms;
   --b-draw: 220ms;
-  --b-highlight: 160ms;
+  --b-complete: 160ms;
+  --b-mark: 160ms;
 
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.22, 1.4, 0.36, 1);
@@ -211,7 +212,8 @@ h1 {
   --d-settle: calc(var(--b-settle) * var(--t));
   --d-reorder: calc(var(--b-reorder) * var(--t));
   --d-draw: calc(var(--b-draw) * var(--t));
-  --d-highlight: calc(var(--b-highlight) * var(--t));
+  --d-complete: calc(var(--b-complete) * var(--t));
+  --d-mark: calc(var(--b-mark) * var(--t));
 }
 
 /* ---- add form ---- */
@@ -327,7 +329,7 @@ h1 {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--sp-1);
   min-height: 2.875rem;
@@ -534,9 +536,19 @@ h1 {
   display: inline-block;
 }
 
-/* Complete: a highlighter swipe, with the strike following 50ms behind
-   so the two read as one gesture with follow-through rather than as two
-   effects firing at once. Both are transform-only wipes from the left. */
+/* ---- emphasis: the highlighter, doing its actual job ----
+   A highlighter means "this matters", so it marks rows you choose, not
+   rows you have finished.
+
+   It used to fire on completion, which was backwards twice over. A
+   completed row already says "recede" — muted text and a strike — so
+   putting it on the loudest colour in the palette contradicted itself,
+   and a list with most rows done became a wall of yellow where the
+   finished work dominated the work still to do.
+
+   Note the last rule: completing a marked row wipes the highlight back
+   off. Done outranks emphasis, because the moment a task is finished it
+   stops being the thing that matters. */
 .rows-title-text::before {
   content: "";
   position: absolute;
@@ -547,16 +559,21 @@ h1 {
   bottom: 0.02em;
   background: var(--hilite);
   mix-blend-mode: multiply;
+  /* Uneven corners: a swipe of a chisel tip does not end square. */
   border-radius: 2px 6px 3px 7px / 6px 2px 7px 3px;
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform var(--d-press) var(--ease-out);
+  transition: transform var(--d-mark) var(--ease-out);
+}
+.rows-row[data-marked] .rows-title-text::before {
+  transform: scaleX(1);
 }
 .rows-row[data-state="done"] .rows-title-text::before,
 .rows-row[data-done="true"] .rows-title-text::before {
-  transform: scaleX(1);
-  transition: transform var(--d-highlight) var(--ease-out);
+  transform: scaleX(0);
 }
+
+/* Complete: a struck-through line, wiped left to right. Transform-only. */
 .rows-title-text::after {
   content: "";
   position: absolute;
@@ -570,11 +587,13 @@ h1 {
   transform-origin: left center;
   transition: transform var(--d-press) var(--ease-out);
 }
-.rows-row[data-state="done"] .rows-title-text::after,
+.rows-row[data-state="done"] .rows-title-text::after {
+  transform: scaleX(1);
+  transition: transform var(--d-complete) var(--ease-out);
+}
 .rows-row[data-done="true"] .rows-title-text::after {
   transform: scaleX(1);
-  transition: transform var(--d-highlight) var(--ease-out)
-    calc(50ms * var(--t));
+  transition: transform var(--d-complete) var(--ease-out);
 }
 
 .rows-edit {
@@ -588,6 +607,50 @@ h1 {
   border: none;
   outline: none;
   box-shadow: 0 1.5px 0 var(--biro);
+}
+
+/* The mark control. Hidden until hover like delete — except when the row
+   IS marked, because a control that toggles a visible state has to stay
+   reachable without hunting for it. */
+.rows-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    opacity var(--d-hover) ease,
+    color var(--d-hover) ease,
+    transform var(--d-hover) var(--ease-spring);
+}
+.rows-mark svg {
+  display: block;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-mark {
+    opacity: 0;
+  }
+  .rows-row:hover .rows-mark,
+  .rows-row:focus .rows-mark,
+  .rows-row:focus-within .rows-mark,
+  .rows-row[data-marked] .rows-mark {
+    opacity: 1;
+  }
+  .rows-mark:hover {
+    transform: rotate(-12deg) scale(1.15);
+  }
+}
+.rows-row[data-marked] .rows-mark {
+  color: var(--ink);
+}
+.rows-mark:active {
+  transform: rotate(-12deg) scale(0.9);
 }
 
 .rows-del {
@@ -956,22 +1019,27 @@ input[type="range"] {
   .rows-study .rows-grip:hover,
   .rows-study .rows-del:hover,
   .rows-study .rows-del:active,
+  .rows-study .rows-mark:hover,
+  .rows-study .rows-mark:active,
   .rows-study .rows-row:hover .rows-title {
     transform: none;
   }
   .rows-study .rows-check path {
     transition: none;
   }
-  /* The highlighter and the strike stop wiping and simply appear. */
+  /* The strike and the highlighter stop wiping and simply appear. */
   .rows-study .rows-title-text::before,
   .rows-study .rows-title-text::after {
     transform: none;
     opacity: 0;
     transition: opacity calc(150ms * var(--t)) ease;
   }
+  .rows-study .rows-row[data-marked] .rows-title-text::before {
+    opacity: 1;
+  }
   .rows-study .rows-row[data-state="done"] .rows-title-text::before,
   .rows-study .rows-row[data-done="true"] .rows-title-text::before {
-    opacity: 1;
+    opacity: 0;
   }
   .rows-study .rows-row[data-state="done"] .rows-title-text::after,
   .rows-study .rows-row[data-done="true"] .rows-title-text::after {
