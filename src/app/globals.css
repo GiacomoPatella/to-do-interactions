@@ -490,6 +490,13 @@ h1 {
   position: absolute;
   left: -1.4rem;
   top: 50%;
+  /* Centred with a negative margin (half the height) rather than
+     translateY(-50%), so the transform property stays free for the
+     hover scale alone. Centring via transform meant every rule that
+     touched transform — including the reduced-motion reset — had to
+     remember to compose the -50% back in or the grip fell out of
+     alignment. */
+  margin-top: -1.25rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -499,7 +506,6 @@ h1 {
   opacity: 0.45;
   cursor: grab;
   touch-action: none; /* the grip is the touch drag surface */
-  transform: translateY(-50%);
   transition:
     opacity var(--d-hover) ease,
     transform var(--d-hover) var(--ease-out);
@@ -515,12 +521,81 @@ h1 {
   }
   .rows-grip:hover {
     opacity: 0.9;
-    transform: translateY(-50%) scale(1.15);
+    transform: scale(1.15);
+  }
+}
+
+/* ---- touch: the grip comes back into the row ----
+   On a coarse pointer the grip is the ONLY drag surface — the row body
+   deliberately keeps scrolling the page (see onRowPointerDown) — so a
+   20px sliver hanging in the page gutter is a broken interaction, not a
+   polish item.
+
+   It is also permanently visible here, because there is no hover to
+   reveal it. That removes the entire reason it was pulled out of the
+   grid: a column that is always visible costs nothing to reserve. So on
+   touch it returns as a real 44px column, and the hanging-in-the-margin
+   treatment stays a pointer-only refinement. */
+@media (pointer: coarse) {
+  .rows-row {
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  }
+  .rows-grip {
+    position: static;
+    margin-top: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    opacity: 0.5;
   }
 }
 .rows-row[data-dragging] .rows-grip {
   cursor: grabbing;
   opacity: 0.9;
+}
+
+/* ---- hit areas ----
+   The visible controls are 36px square; the minimum comfortable target
+   is 40. Rather than grow the icons — which would change the row's
+   rhythm and the optical spacing that was tuned around it — each button
+   gets an invisible pseudo-element that extends the target without
+   touching layout.
+
+   The horizontal growth is exactly 2px per side and no more. Mark and
+   delete sit 4px apart, so 2px each is the largest extension that makes
+   them meet without overlapping, and two interactive elements must
+   never share a pixel: which one you hit then depends on paint order
+   rather than on where you aimed. */
+.rows-check,
+.rows-mark,
+.rows-del,
+.rows-undo,
+.bar-tab {
+  position: relative;
+}
+.rows-check::after,
+.rows-mark::after,
+.rows-del::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+}
+/* The short controls have no horizontal neighbours, so they can grow
+   sideways-free and take the whole 40 vertically. */
+.rows-undo::after,
+.bar-tab::after {
+  content: "";
+  position: absolute;
+  inset-block: -8px;
+  inset-inline: 0;
+}
+@media (pointer: coarse) {
+  /* Touch wants 44. There is room vertically; horizontally there still
+     is not, so the width stays pinned at the collision limit. */
+  .rows-check::after,
+  .rows-mark::after,
+  .rows-del::after {
+    inset: -4px -2px;
+  }
 }
 
 .rows-check {
@@ -1162,6 +1237,7 @@ input[type="range"] {
   .rows-study .rows-del:active svg,
   .rows-study .rows-mark:hover svg,
   .rows-study .rows-mark:active svg,
+  .rows-study .rows-grip:hover,
   .rows-study .rows-row:hover .rows-title {
     transform: none;
   }
@@ -1173,12 +1249,6 @@ input[type="range"] {
   .rows-study .rows-del-lid,
   .rows-study .rows-del:hover .rows-del-lid {
     transition: transform var(--d-hover) ease;
-  }
-  /* The grip keeps its centring transform — dropping it would drop the
-     row out of alignment, not just stop it animating. */
-  .rows-study .rows-grip,
-  .rows-study .rows-grip:hover {
-    transform: translateY(-50%);
   }
   .rows-study .rows-check path {
     transition: none;
