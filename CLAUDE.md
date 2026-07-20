@@ -3,61 +3,42 @@
 A working to-do list where the craft is the subject. What happens when a row is
 added, completed, reordered, edited, killed. The list is a pretext.
 
-Live copy of the framing is in `src/app/page.tsx`. Read `src/components/RowsStudy.tsx`
-before changing anything: it is commented and the animation system is not obvious.
+Read `src/components/RowsStudy.tsx` before changing anything: it is heavily
+commented and the animation system is not obvious. `src/app/globals.css` owns
+every visual state; the component owns timing and layout.
 
 **This is a standalone project.** It is not part of the gpcodes.com portfolio and
 must not look like it. Giacomo's portfolio links out to this; it does not contain
 it. An earlier session built it inside the portfolio repo by mistake and it was
-moved here verbatim, which is why the current styling still looks like that site.
+moved here verbatim.
+
+**The risk to manage, permanently:** a to-do app is the most clichéd demo there
+is. It only earns a place on a senior designer's portfolio if the interaction
+craft is explicitly the subject. If it ends up looking like a tutorial to-do app
+with transitions bolted on, it has failed. This is also why the source is part of
+the deliverable — the commented reasoning is what is actually being shown.
 
 ---
 
-## The job right now: the rebrand
+## Where it stands
 
-The portfolio is deliberately restrained: cool slate neutrals, one deep petrol
-accent, mono labels, minimal motion. **This is the opposite brief.**
+**The rebrand is done.** Identity is felt-tip sketchbook: bright paper, hand-drawn
+marks with uneven radii, one display face (Caveat) for the title only, Figtree for
+reading, DM Mono for instrumentation. Light mode only, on purpose — there is no
+`prefers-color-scheme` block and there should not be one.
 
-Give it its own identity. Playful, colourful, characterful. Pick a palette and a
-typeface that would look *wrong* on a restrained portfolio, and commit to it.
+The accent is **black felt-tip**, not a colour. It was marker red; the palette is
+now down to one colour with a job — the highlighter yellow — and everything else
+is ink on paper. Yellow is the only shout in the piece, which is what makes it
+land. Blue (`--biro`) is system-only: focus rings, never decoration.
 
-Giacomo's words: treat it as real design work, not a token swap.
+**Signature moments, deliberately only two:** the add sweep (the rule draws itself
+in) and the delete (the row is drawn into its own bin). Everything else is quietly
+excellent rather than narrated. Restraint is what makes those two land — if a
+third metaphor appears, one of these should probably go.
 
-**Where to work:** the top of `src/app/globals.css` declares 22 tokens under a
-marked header. Nothing in the `rows-*` block below reads a hardcoded colour, size
-or radius, so changing those values rebrands the whole thing. They currently hold
-the portfolio's values, which is the starting point to move away from, not the
-destination.
-
-The page furniture (`.lede`, `.notes`, `h1`, `.eyebrow`, `.skip-link`) is minimal
-on purpose and is fair game to replace entirely.
-
----
-
-## Stage 2 is still outstanding
-
-Stage 1 is done and verified. A working slice of Stage 2 exists: `add` sprouts
-(`data-enter="sprout"`, 380ms) and `delete` crumples into a transient bin
-(`data-kind="crumple"`, 400ms, gravity easing, trajectory in `--fall-x/--fall-y`).
-
-Giacomo's brief, in his words: "start adding actual special touches for every
-action and reaction. Crumble up and throw in a bin for deleting, throwing a seed
-and growing for a new task, I don't know, stuff like that."
-
-Weigh these rather than obeying them:
-
-- **Do not give every action a metaphor.** If everything is a small story the thing
-  becomes a toy and slows down. Two or three signature moments, and let the rest be
-  quietly excellent. Restraint is what makes the flourishes land.
-- **Delight must survive repetition.** An elaborate delete is charming once and
-  irritating by the tenth. Keep signature animations under roughly 400ms and make
-  rapid repeated actions interrupt gracefully rather than queueing.
-- Being showier here than on the portfolio is the point. This is the lab.
-
-**The risk to manage:** a to-do app is the most clichéd demo there is. It only earns
-a place on a senior designer's portfolio if the interaction craft is explicitly the
-subject. If it ends up looking like a tutorial to-do app with transitions bolted on,
-it has failed.
+**Still open:** nothing is committed for it, but the obvious next candidates are
+the empty state and the completed-row treatment. Neither is a promise.
 
 ---
 
@@ -66,32 +47,90 @@ it has failed.
 ### No animation library. CSS and WAAPI only
 
 Motion and GSAP were both considered and rejected, after the no-dependencies rule
-was explicitly lifted for this project. The deciding argument:
+was explicitly lifted for this project. **The original reasoning was too strong and
+has been corrected — read this before re-arguing it.**
 
-**The speed control is incompatible with springs, and it is the best thing in the
-piece.** It works because every duration is a number multiplied by `--t`. A spring
-has no duration; slowing one means changing stiffness and damping, which alters its
-*character*, not just its speed. What you inspected at quarter speed would no longer
-be what plays at full speed, so the control would become a lie.
+What was written here before: *"the time control is incompatible with springs,
+because a spring has no duration."* That is true of **runtime** springs only. It is
+false of **baked** springs, which is what ships.
 
-This decision **survived** the removal of the readout, and is now load-bearing in a
-stronger way: the whole bottom bar is duration-based. Every slider writes a `--b-*`
-base value and the speed slider writes `--t`; springs would have nothing to write.
+`tools/spring.mjs` samples a real damped harmonic oscillator into a CSS `linear()`
+easing function. These are genuine springs — multiple direction reversals, correct
+decay envelope, things a `cubic-bezier` cannot express (it has two control points,
+so it can overshoot once and never oscillate). And because a baked spring is just
+an easing function over a duration, multiplying by `--t` is an *exact* time-scale.
+The control stays honest.
 
-Supporting points:
+Three curves, all in `globals.css`:
 
-- Velocity-on-interrupt is the one real argument for springs, but the native fix is
-  WAAPI: `element.animate()` with `composite: "add"` layers onto a running animation
-  instead of restarting it, and `playbackRate` gives exact time-scaling a spring
-  cannot. Zero dependencies, and it strengthens the readout rather than muddying it.
-- Drag-reorder already works (pointer capture, `touch-action` on the grip,
-  `offsetTop` targeting so mid-glide rows report their true slot). A library would
-  buy a rewrite back to where it already is.
-- The crumple plays on a ghost that is already out of flow and is then destroyed. It
-  never retargets, so fire-and-forget keyframes are genuinely correct there.
+| token | visual | total | used for |
+| --- | --- | --- | --- |
+| `--ease-spring` | 110ms | 320ms | most controls |
+| `--ease-spring-lively` | 120ms | 500ms | the bin lid, and nothing else |
+| `--ease-land` | 160ms | 172ms | anything the drawer prints a number for |
 
-**Revisit only if** burst-testing shows stutter that `composite: "add"` cannot fix.
-That is a testable claim; test it rather than assuming.
+**The rule that matters:** a spring's `transition-duration` must be its **total**,
+not its visual duration. Setting the visual number squashes the whole oscillation
+into that window and you get a shiver, not a spring. That is why durations the
+timings drawer displays get `--ease-land` (total ≈ visual, so a slider reading
+130ms means 130ms), while the bouncy totals live on `--b-pop` / `--b-pop-lively`,
+which are internal and deliberately not sliders.
+
+Springs are **asymmetric throughout**: only arrival springs. Leaving is a short
+plain decelerate, because a 320ms spring running backwards on un-hover makes a
+control feel reluctant to let go.
+
+**Not sprung, on purpose:** the FLIP glides. A row travelling to a new slot should
+arrive decisively, and five rows bouncing into place at once reads as unstable.
+
+**What Motion would actually buy**, stated honestly so it can be weighed rather
+than dismissed: the `layout` prop would delete ~80 lines — `snap()`, the
+invert/commit/play `useLayoutEffect`, `prevTops`, `clearTransitionAfter`. That is a
+real win. It costs ~30kb, and it breaks one specific property: the FLIP transitions
+are written as `var(--d-reorder)`, so **dragging a slider retimes a glide already
+in flight.** Motion reads its transition config when the animation starts. That
+live retiming is the most direct proof the bottom bar is real and not a stage prop.
+
+**Revisit only if** burst-testing shows stutter that WAAPI `composite: "add"`
+cannot fix. That is a testable claim; test it rather than assuming.
+
+### The bottom bar is a TIME SCALE, not a speed
+
+`--t` **multiplies every duration**. So `0.25×` is a quarter of the time and runs
+*faster*; `3.00×` is triple and runs *slower*. The field is `Params.timeScale`.
+
+It used to be called `Params.speed` and labelled "speed", and the `s` shortcut set
+`0.25` while announcing "slow motion on" — so the slow-motion key made the entire
+app run **four times faster**, and `2.00×` meant half speed. The name caused it.
+Do not reintroduce either the label or the field name.
+
+Micro-interaction timings (`--b-press`, `--b-hover`, `--b-pop`, `--b-pop-lively`,
+`--b-stagger`) are intentionally **not** in the drawer. Exposing a 320ms number for
+something that reads as a 110ms pop would be the same category of lie.
+
+### Delete: into the bin, and the lid does the acting
+
+The original brief said *"crumble up and throw in a bin."* What shipped converges
+the row on its own bin in 150ms. The reasoning, because it generalises:
+
+- **The flourish goes on the small element, not the big one.** The instinct is to
+  make the *row* perform. That is exactly what dies on the tenth repeat — a big
+  object travelling a long way that you cannot help watching. The lid is 10px and
+  moves for 75ms, so it still reads at the fiftieth delete.
+- **No crumple.** You cannot crumple with transform and opacity; a faked one reads
+  as a glitch, and it needs ~400ms to be legible at all, which is the duration that
+  stops being charming.
+- **Semantics first.** `⌘z` exists. A metaphor that says *destroyed* — crumpling,
+  tearing, burning — contradicts the undo sitting in the status line. A bin is the
+  one delete metaphor that is honestly recoverable.
+- `transform-origin` lands on the delete control, so one `scale(0.12)` converges
+  everything on the bin for free — no coordinates, and the target travels with the
+  ghost because the ghost renders its own bin.
+- The easing is **in-out**, and this was measured, not guessed. At the 75ms mark
+  where the lid shuts: `ease-in` leaves the row at 87% scale (lid closes on
+  something that hasn't moved), `ease-out` puts it at 15% (gone before the lid
+  starts), `in-out` lands it at 56% — visibly half-swallowed exactly as the lid
+  comes down.
 
 ### ~~The readout must stay honest~~ · SUPERSEDED 2026-07-20
 
@@ -99,15 +138,15 @@ The readout panel is **gone**, along with the lede and the "how it moves, honest
 notes. Giacomo's instruction: "even though this is an experiment, I don't want the
 research around it. I just want the app, no paragraphs, no readouts."
 
-Do not reinstate any of it. The app is now a to-do list centred on the page with a
+Do not reinstate any of it. The app is a to-do list centred on the page with a
 bottom bar; the bar is where the study survives, as controls rather than commentary.
 
 What the readout was defending is still defended, differently. Its purpose was to
 prove the motion was *chosen* rather than accepted from a default. The timing
-drawer now does that better by making every value adjustable and visible: sliders
-for add / complete / delete / reorder / settle / enter, a movement-curve select, and
-a speed multiplier. The old argument holds — if a change makes those controls
-vaguer, or hides a real number behind a label, the change is wrong.
+drawer does that better by making every value adjustable and visible. The old
+argument holds — **if a change makes those controls vaguer, or hides a real number
+behind a label, the change is wrong.** The `speed`/`timeScale` bug above was
+exactly this failure, and it survived a long time.
 
 ---
 
@@ -117,13 +156,34 @@ vaguer, or hides a real number behind a label, the change is wrong.
 - No heavyweight dependencies. See the settled decision above.
 - localStorage persistence. Rows never leave the page.
 - **Animate transform and opacity only.** Nothing animates height: position changes
-  are FLIP glides driven from `RowsStudy.tsx` (first, last, invert, play).
+  are FLIP glides driven from `RowsStudy.tsx` (first, last, invert, play). The one
+  deliberate exception is a 1.3px `filter: blur()` on non-dragged rows during a
+  drag, which is depth-of-field, not layout.
 - `prefers-reduced-motion` respected in **both** places it has to be: the stylesheet
   drops translates and scales while keeping opacity crossfades, and the script checks
   the same media query before applying a transform, because a media query cannot stop
   JavaScript from setting one.
 - Keyboard operable throughout. This is not a pointer-only toy.
+- Every interactive control has a **≥40px hit area**, extended by a pseudo-element
+  so layout is untouched. Mark and delete sit 4px apart, so 2px per side is the
+  ceiling — they meet at exactly 0px overlap. Two interactive elements must never
+  share a pixel.
 - `npm run build` must pass.
+
+## Traps that have already been sprung once
+
+- **The leaving ghost is a different element from the row.** Anything driven off a
+  `data-*` attribute on `.rows-row` must be mirrored onto the ghost `<li>`, or the
+  exit starts from a state the row was never in. This is how deleting a highlighted
+  row silently lost its highlight on the first frame.
+- **A running WAAPI animation outranks inline styles.** The drag-release momentum
+  animation has to be cancelled before FLIP can move that row — see the top of the
+  layout effect.
+- **Params persist in localStorage.** Changing `DEFAULTS` does nothing visible until
+  you hit "reset to defaults" in the timings drawer. Expect to be confused by this.
+- **Centre things with margins, not transforms**, when the element also has a hover
+  transform. Composing `translate(-50%)` into every other rule is a trap that gets
+  forgotten in exactly one place.
 
 ## Running it
 
@@ -131,7 +191,18 @@ vaguer, or hides a real number behind a label, the change is wrong.
 npm install
 npm run dev          # port 3000 by default
 npm run build        # static export to out/
+node tools/spring.mjs   # regenerate the spring curves
 ```
 
-Verify changes by driving the app in a browser, not by the build passing. Animation
-regressions do not show up in a typecheck.
+**Verify changes by driving the app in a browser, not by the build passing.**
+Animation regressions do not show up in a typecheck.
+
+Two things that will waste an hour if you don't know them:
+
+- **Background tabs freeze `requestAnimationFrame` and CSS transitions, but keep
+  `setTimeout` running.** Under automation this makes the app look broken — rows
+  stuck at `opacity: 0`, transitions pinned at `currentTime: 0` — when nothing is
+  wrong.
+- To inspect a curve headlessly, **scrub it**: `el.animate(...)`, `.pause()`, then
+  set `.currentTime`. To check a resolved end state, inject
+  `transition: none !important` and read the computed value.
