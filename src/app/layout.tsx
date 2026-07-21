@@ -1,19 +1,32 @@
 import type { Metadata } from "next";
-import { Caveat, Figtree, DM_Mono } from "next/font/google";
+import {
+  Kalam,
+  Playpen_Sans,
+  Architects_Daughter,
+  Figtree,
+  DM_Mono,
+  Shantell_Sans,
+} from "next/font/google";
 import "./globals.css";
 
-/* Three faces, and the split between them is the whole argument.
-
-   The hand is decorative, so it stays decorative: Caveat sets the headline
-   and nothing else. The temptation with a sketchbook identity is to set the
-   row titles in handwriting too, and that is exactly how this kind of thing
-   starts looking like a craft-fair flyer — a felt-tip face at 15px is both
-   harder to read and cheaper-looking than the real thing. The hand belongs
-   in the marks (the wobbly checkbox, the highlighter swipe), not in the
-   functional text. */
-const display = Caveat({
-  variable: "--font-display-src",
+/* Three heading hands, switchable at runtime to compare (organic skin only;
+   clean swaps the title back to Figtree). Each carries its own CSS variable,
+   and --font-display points at whichever data-heading selects. All are
+   legible everyday hands rather than brush scripts — Caveat rendered the
+   "To-Do / To-Day" letterforms awkwardly and is gone. */
+const headKalam = Kalam({
+  variable: "--font-head-kalam",
   subsets: ["latin"],
+  weight: ["400", "700"],
+});
+const headPlaypen = Playpen_Sans({
+  variable: "--font-head-playpen",
+  subsets: ["latin"],
+});
+const headArchitects = Architects_Daughter({
+  variable: "--font-head-architects",
+  subsets: ["latin"],
+  weight: ["400"],
 });
 
 /* Figtree does the reading: lede, notes, and every row title. Warm and
@@ -33,8 +46,17 @@ const mono = DM_Mono({
   weight: ["400", "500"],
 });
 
+/* The organic variant takes the sketchbook idea to its logical end: the
+   hand is not confined to the marks, it sets the whole interface. Shantell
+   Sans is a modern, bouncy, genuinely legible hand — readable at 15px in a
+   way a brush script is not. The clean variant never loads it. */
+const hand = Shantell_Sans({
+  variable: "--font-hand-src",
+  subsets: ["latin"],
+});
+
 export const metadata: Metadata = {
-  title: "things to do",
+  title: "To-Do To-Day",
   description:
     "A to-do list with its transition timings exposed as live controls. Fully keyboard operable.",
 };
@@ -45,9 +67,41 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${display.variable} ${text.variable} ${mono.variable}`}
+      className={`${headKalam.variable} ${headPlaypen.variable} ${headArchitects.variable} ${text.variable} ${mono.variable} ${hand.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {/* One roughen filter, referenced by the organic skin as
+            filter: url(#rough). It displaces straight edges into a drawn
+            wobble; the clean skin sets --stroke-filter: none and never
+            touches it. The wide filter region stops the displaced strokes
+            from clipping at the element box. */}
+        <svg className="svg-defs" aria-hidden="true" focusable="false">
+          <filter
+            id="rough"
+            x="-20%"
+            y="-20%"
+            width="140%"
+            height="140%"
+            filterUnits="objectBoundingBox"
+          >
+            <feTurbulence
+              type="fractalNoise"
+              baseFrequency="0.017 0.013"
+              numOctaves="2"
+              seed="8"
+              result="noise"
+            />
+            <feDisplacementMap
+              in="SourceGraphic"
+              in2="noise"
+              scale="2.4"
+              xChannelSelector="R"
+              yChannelSelector="G"
+            />
+          </filter>
+        </svg>
+        {children}
+      </body>
     </html>
   );
 }

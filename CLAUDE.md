@@ -37,8 +37,13 @@ in) and the delete (the row is drawn into its own bin). Everything else is quiet
 excellent rather than narrated. Restraint is what makes those two land — if a
 third metaphor appears, one of these should probably go.
 
-**Still open:** nothing is committed for it, but the obvious next candidates are
-the empty state and the completed-row treatment. Neither is a promise.
+**Feature-complete.** The two candidates once flagged here — the empty state and
+the completed-row treatment — both ship now, as quiet work rather than signature
+moments: the empty state is a dashed hand-drawn frame with a restore link; the
+completed row mutes and strikes, and wipes any highlighter back off in the same
+move. Nothing else is committed, and that is the position, not a gap. A third
+narrated interaction would weaken the two that carry the piece. Add one only with
+a specific reason, and expect to retire something in exchange.
 
 ---
 
@@ -184,6 +189,14 @@ exactly this failure, and it survived a long time.
 - **Centre things with margins, not transforms**, when the element also has a hover
   transform. Composing `translate(-50%)` into every other rule is a trap that gets
   forgotten in exactly one place.
+- **A drag reorder fires many times before React re-renders.** `maybeReorder` runs
+  on every `pointermove`, so a fast drag makes several calls close over the same
+  stale `rows` snapshot while `setRows` already sees fresh state. Splicing the fresh
+  array with an index taken from the stale snapshot drops the dragged row and
+  duplicates another — a duplicate React key, and corrupted localStorage that
+  survives reload. Resolve the dragged row by **id inside the updater**, never by a
+  snapshot index, and clamp the insertion point the same way. `moveRow` (keyboard)
+  looks similar but is safe: discrete events re-render between each move.
 
 ## Running it
 

@@ -349,6 +349,24 @@ function FadeIn({
   );
 }
 
+/* Three switchable looks: two organic hands over the same rough-stroke skin,
+   and one clean modern UI. The value is written to <html data-variant> so it
+   also reaches the title, which lives outside this component. */
+type Variant = "organic" | "clean";
+const VARIANTS: { value: Variant; label: string }[] = [
+  { value: "organic", label: "organic" },
+  { value: "clean", label: "clean" },
+];
+
+/* Heading-font options for the organic title, compared via their own toggle.
+   Each preview renders in its own face. */
+type Heading = "kalam" | "playpen" | "architects";
+const HEADINGS: { value: Heading; label: string; cssVar: string }[] = [
+  { value: "kalam", label: "Kalam", cssVar: "--font-head-kalam" },
+  { value: "playpen", label: "Playpen", cssVar: "--font-head-playpen" },
+  { value: "architects", label: "Architects", cssVar: "--font-head-architects" },
+];
+
 export default function RowsStudy() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -371,6 +389,25 @@ export default function RowsStudy() {
   const [focusId, setFocusId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [live, setLive] = useState("");
+  /* Two skins, switchable at runtime for comparison. The attribute lives on
+     <html> so it also reaches the title, which renders outside this tree. */
+  const [variant, setVariant] = useState<Variant>("organic");
+  const [heading, setHeading] = useState<Heading>("kalam");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("gp-lab-variant");
+    if (stored === "clean") setVariant("clean");
+    const h = localStorage.getItem("gp-lab-heading");
+    if (h === "playpen" || h === "architects") setHeading(h);
+  }, []);
+  useEffect(() => {
+    document.documentElement.dataset.variant = variant;
+    localStorage.setItem("gp-lab-variant", variant);
+  }, [variant]);
+  useEffect(() => {
+    document.documentElement.dataset.heading = heading;
+    localStorage.setItem("gp-lab-heading", heading);
+  }, [heading]);
 
   const studyRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -744,7 +781,9 @@ export default function RowsStudy() {
   const toggleMark = useCallback(
     (id: string) => {
       const row = rows.find((r) => r.id === id);
-      if (!row) return;
+      // Done outranks emphasis: a finished task stops being the thing that
+      // matters, so it cannot be highlighted (and its control is hidden).
+      if (!row || row.done) return;
       const next = !row.marked;
       setRows((r) => r.map((x) => (x.id === id ? { ...x, marked: next } : x)));
       announce(next ? "row highlighted" : "highlight removed");
@@ -990,9 +1029,17 @@ export default function RowsStudy() {
       el: e.currentTarget,
       samples: [{ t: e.timeStamp, y: e.clientY }],
     };
+    // Track the rest of the gesture on window, not on this <li>. Pointer
+    // capture can quietly drop mid-drag — a reorder moves this node in the
+    // DOM, or a fast flick carries the pointer off the element — and after
+    // that a pointerup delivered elsewhere would never reach the row, leaving
+    // it stuck lifted. window always sees the release, so the drag always ends.
+    window.addEventListener("pointermove", onRowPointerMove);
+    window.addEventListener("pointerup", onRowPointerEnd);
+    window.addEventListener("pointercancel", onRowPointerEnd);
   }
 
-  function onRowPointerMove(e: React.PointerEvent<HTMLLIElement>) {
+  function onRowPointerMove(e: PointerEvent) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
     d.lastY = e.clientY;
@@ -1027,16 +1074,28 @@ export default function RowsStudy() {
     if (current === -1 || target === current) return;
     d.didReorder = true;
     snap("reorder");
+    // maybeReorder fires many times per drag, so several calls can run
+    // against this one stale `rows` closure before React re-renders. Resolve
+    // the dragged row by id inside the updater — indexing the fresh array `r`
+    // with `current` (an index into the stale snapshot) would splice out the
+    // wrong row, dropping the dragged one and duplicating another. Clamp the
+    // insertion point for the same reason: `target` is measured against the
+    // snapshot, not `r`.
     setRows((r) => {
-      const me = r[current];
+      const me = r.find((x) => x.id === d.id);
+      if (!me) return r;
       const without = r.filter((x) => x.id !== d.id);
-      return [...without.slice(0, target), me, ...without.slice(target)];
+      const at = Math.max(0, Math.min(target, without.length));
+      return [...without.slice(0, at), me, ...without.slice(at)];
     });
   }
 
-  function onRowPointerEnd(e: React.PointerEvent<HTMLLIElement>) {
+  function onRowPointerEnd(e: PointerEvent) {
     const d = drag.current;
     if (!d || e.pointerId !== d.pointerId) return;
+    window.removeEventListener("pointermove", onRowPointerMove);
+    window.removeEventListener("pointerup", onRowPointerEnd);
+    window.removeEventListener("pointercancel", onRowPointerEnd);
     drag.current = null;
     if (!d.active) return;
     setDraggingId(null);
@@ -1111,6 +1170,13 @@ export default function RowsStudy() {
   /* ---- render ---- */
   const showEmpty = loaded && rows.length === 0 && ghosts.length === 0;
 
+  /* The footer reads as progress, not inventory: how much is off the list,
+     not how much is on it. When the last one lands it earns a single quiet
+     beat — a drawn check, not confetti. */
+  const total = rows.length;
+  const doneCount = rows.reduce((n, r) => n + (r.done ? 1 : 0), 0);
+  const allDone = total > 0 && doneCount === total;
+
   /* Both halves of the timing system, handed to CSS as custom
      properties. Everything downstream is calc(--b-x * --t). */
   const vars = {
@@ -1132,6 +1198,43 @@ export default function RowsStudy() {
       style={vars}
       aria-label="to-do list"
     >
+      <div className="variant-toggle" role="group" aria-label="visual style">
+        {VARIANTS.map(({ value, label }) => (
+          <button
+            key={value}
+            type="button"
+            className="variant-opt"
+            data-active={variant === value ? "true" : undefined}
+            aria-pressed={variant === value}
+            onClick={() => setVariant(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {variant === "organic" && (
+        <div
+          className="variant-toggle heading-toggle"
+          role="group"
+          aria-label="heading font"
+        >
+          {HEADINGS.map(({ value, label, cssVar }) => (
+            <button
+              key={value}
+              type="button"
+              className="variant-opt"
+              data-active={heading === value ? "true" : undefined}
+              aria-pressed={heading === value}
+              style={{ fontFamily: `var(${cssVar})` }}
+              onClick={() => setHeading(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form
         className="rows-add"
         onSubmit={(e) => {
@@ -1212,9 +1315,6 @@ export default function RowsStudy() {
                   if (e.animationName === "rows-rule-draw") endDraw(row.id);
                 }}
                 onPointerDown={(e) => onRowPointerDown(e, row.id)}
-                onPointerMove={onRowPointerMove}
-                onPointerUp={onRowPointerEnd}
-                onPointerCancel={onRowPointerEnd}
               >
                 <span className="rows-grip" data-grip aria-hidden="true">
                   <GripDots />
@@ -1337,9 +1437,35 @@ export default function RowsStudy() {
         )}
       </div>
 
-      <p className="rows-status" data-flip="status">
-        <span>
-          {rows.length} {rows.length === 1 ? "row" : "rows"}
+      <p
+        className="rows-status"
+        data-flip="status"
+        data-complete={allDone ? "true" : undefined}
+      >
+        <span className="rows-count">
+          {total === 0 ? (
+            ""
+          ) : allDone ? (
+            <>
+              <svg
+                className="rows-count-check"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 13 C 7 15, 9 18, 10 20 C 13 12, 17 6, 21 3"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              all done
+            </>
+          ) : (
+            `${doneCount} of ${total} done`
+          )}
         </span>
         <button
           type="button"

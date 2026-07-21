@@ -76,11 +76,55 @@
 
   --shadow: 0 6px 18px rgba(35, 32, 28, 0.14);
 
-  --font-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo, monospace;
-  --font-display: var(--font-display-src), "Bradley Hand", cursive;
-  --font-sans: var(--font-text-src), ui-sans-serif, system-ui, sans-serif;
+  /* ---- faces ----
+     Two skins share this file. ORGANIC is the default: the hand is not
+     confined to the marks, it sets everything, so the reading and
+     instrumentation faces are Patrick Hand. The CLEAN skin swaps --font-sans
+     and --font-mono back to the crisp pair further down. */
+  --font-hand: var(--font-hand-src), "Comic Sans MS", cursive;
+  --font-clean-sans: var(--font-text-src), ui-sans-serif, system-ui, sans-serif;
+  --font-clean-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo,
+    monospace;
+
+  /* Default heading hand; data-heading swaps it, clean overrides it. */
+  --font-display: var(--font-head-kalam), "Bradley Hand", cursive;
+  --font-sans: var(--font-hand);
+  --font-mono: var(--font-hand);
+
+  /* Every straight edge is drawn through this. The clean skin sets it to
+     none; here it displaces borders and rules into a felt-tip wobble. */
+  --stroke-filter: url(#rough);
 
   --bar-h: 3.25rem;
+}
+
+.svg-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* Heading-font switch. Scoped early so the clean skin's --font-display
+   override (later in the file) still wins for the clean title. */
+[data-heading="playpen"] {
+  --font-display: var(--font-head-playpen), "Bradley Hand", cursive;
+}
+[data-heading="architects"] {
+  --font-display: var(--font-head-architects), "Bradley Hand", cursive;
+}
+
+/* A handwriting face reads smaller than a clean sans at the same pixel
+   size, so both organic skins get a couple of points back on the reading
+   text. Scoped away from clean, which is tuned for Figtree already. */
+html:not([data-variant="clean"]) .rows-title,
+html:not([data-variant="clean"]) .rows-edit,
+html:not([data-variant="clean"]) .rows-input {
+  font-size: 1.09rem;
+}
+html:not([data-variant="clean"]) .rows-status,
+html:not([data-variant="clean"]) .rows-empty {
+  font-size: var(--text-sm);
 }
 
 * {
@@ -158,7 +202,10 @@ body {
 }
 
 h1 {
-  margin: 0 0 var(--sp-4);
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 var(--sp-6);
   font-family: var(--font-display);
   font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
   font-weight: 700;
@@ -189,6 +236,39 @@ h1 {
   /* Uneven corners: a swipe of a chisel tip does not end square. */
   border-radius: 3px 10px 4px 12px / 10px 3px 12px 4px;
   transform: rotate(-0.6deg);
+}
+.title-doodle {
+  position: absolute;
+  top: -0.5em;
+  right: -0.85em;
+  width: 1.4rem;
+  height: 1.4rem;
+  color: var(--ink);
+  transform-origin: center;
+  pointer-events: none;
+  overflow: visible;
+  /* Roughened like every other organic stroke, so the sun reads as drawn
+     rather than geometric (it is hidden in the clean skin). */
+  filter: var(--stroke-filter);
+  /* A slow, continuous ease-in-out sway — it drifts and eases at each turn
+     rather than snapping. Decorative, so it runs on its own clock, not the
+     app's time scale. */
+  animation: doodle-sway 6s ease-in-out infinite;
+}
+@keyframes doodle-sway {
+  0%,
+  100% {
+    transform: rotate(-11deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-doodle {
+    animation: none;
+    transform: rotate(-9deg);
+  }
 }
 
 /* ============================================================
@@ -302,37 +382,61 @@ h1 {
   min-width: 0;
   display: block;
 }
+/* A line to write on, not a box — and drawn on a pseudo so the roughen
+   filter waves the rule without wobbling what you type on it. */
+.rows-input-wrap::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--line);
+  filter: var(--stroke-filter);
+  pointer-events: none;
+  transition: background-color var(--d-hover) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-input-wrap:hover::after {
+    background: var(--muted);
+  }
+}
+.rows-input-wrap:focus-within::after {
+  background: var(--focus);
+}
 .rows-input {
   width: 100%;
   padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-2);
   border: 0;
-  /* A line to write on, not a box. */
-  border-bottom: 2px solid var(--line);
   border-radius: 0;
   background: none;
   font: inherit;
   font-size: var(--text-md);
   color: var(--ink);
-  transition: border-color var(--d-hover) ease;
 }
 .rows-input::placeholder {
   color: var(--muted);
 }
-@media (hover: hover) and (pointer: fine) {
-  .rows-input:hover {
-    border-color: var(--muted);
-  }
-}
 .rows-input:focus {
   outline: none;
-  border-color: var(--biro);
 }
 .rows-input-kbd {
   position: absolute;
   right: var(--sp-2);
   top: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.4rem;
+  padding: 0.12rem 0.32rem;
+  /* A drawn keycap, uneven corners like everything else here. */
+  border: 1.5px solid var(--line);
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
+  filter: var(--stroke-filter);
+  background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
+  line-height: 1;
   color: var(--muted);
   transform: translateY(-50%);
   transition: opacity var(--d-hover) ease;
@@ -347,6 +451,7 @@ h1 {
   /* Hand-drawn corners: uneven radii on both axes so no two corners
      match. One declaration, and the button stops looking CSS-drawn. */
   border-radius: 6px 14px 8px 16px / 14px 6px 16px 8px;
+  filter: var(--stroke-filter);
   background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -411,7 +516,8 @@ h1 {
   gap: var(--sp-1);
   min-height: 2.875rem;
   padding-inline: 0 var(--sp-1);
-  border-radius: var(--radius-sm);
+  /* Hand-drawn corners, like every other surface here. */
+  border-radius: 5px 11px 6px 12px / 11px 5px 12px 6px;
   background: var(--bg);
   transition:
     /* --ease-land, not a bouncy spring: --b-enter is a number the
@@ -443,6 +549,7 @@ h1 {
   height: 1.5px;
   background: var(--line);
   transform-origin: left center;
+  filter: var(--stroke-filter);
   transition: background-color var(--d-hover) ease;
 }
 
@@ -598,8 +705,7 @@ h1 {
     opacity: 0;
   }
   .rows-row:hover .rows-grip,
-  .rows-row:focus .rows-grip,
-  .rows-row:focus-within .rows-grip {
+  .rows-row:focus-visible .rows-grip {
     opacity: 0.45;
   }
   .rows-grip:hover {
@@ -702,6 +808,7 @@ h1 {
   height: 1.25rem;
   border: 2px solid var(--ink);
   border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
+  filter: var(--stroke-filter);
   transform: rotate(-1.5deg);
   /* Asymmetric on purpose, and this pattern repeats on every springy
      control below: only the ARRIVAL springs. Letting a 320ms spring run
@@ -887,7 +994,7 @@ h1 {
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
   color: var(--muted);
   cursor: pointer;
   /* No transform on the button itself — see .rows-del for why. */
@@ -937,8 +1044,7 @@ h1 {
     opacity: 0;
   }
   .rows-row:hover .rows-mark,
-  .rows-row:focus .rows-mark,
-  .rows-row:focus-within .rows-mark,
+  .rows-row:focus-visible .rows-mark,
   .rows-row[data-marked] .rows-mark {
     opacity: 1;
   }
@@ -962,6 +1068,14 @@ h1 {
 .rows-row[data-marked] .rows-mark {
   color: var(--ink);
 }
+/* Done outranks emphasis: a finished row cannot be highlighted, so the
+   control is withdrawn entirely rather than left lit over a row whose
+   yellow is already suppressed. Placed after the reveal rules so it wins. */
+.rows-row[data-state="done"] .rows-mark,
+.rows-row[data-done="true"] .rows-mark {
+  opacity: 0;
+  pointer-events: none;
+}
 .rows-mark:active svg {
   transform: rotate(-14deg) scale(0.9);
 }
@@ -975,7 +1089,7 @@ h1 {
   padding: 0;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
   color: var(--muted);
   cursor: pointer;
   transition:
@@ -987,8 +1101,7 @@ h1 {
     opacity: 0;
   }
   .rows-row:hover .rows-del,
-  .rows-row:focus .rows-del,
-  .rows-row:focus-within .rows-del {
+  .rows-row:focus-visible .rows-del {
     opacity: 1;
   }
   /* The lid opens: the bin telegraphs what it is for before you commit
@@ -1065,18 +1178,31 @@ h1 {
 /* ---- empty state ---- */
 
 .rows-empty {
-  position: absolute;
-  inset: 0;
+  position: relative;
   display: flex;
   align-items: center;
-  padding-inline: var(--sp-2);
-  border: 2px dashed var(--line);
-  border-radius: 8px 16px 10px 18px / 16px 8px 18px 10px;
+  justify-content: center;
+  min-height: 6.5rem;
+  padding: var(--sp-5) var(--sp-4);
+  text-align: center;
+  text-wrap: balance;
+  line-height: 1.6;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   color: var(--muted);
   opacity: 0;
   transition: opacity var(--d-enter) var(--ease-out);
+}
+/* The dashed frame lives on a pseudo so the roughen filter can wave it
+   without dragging the text along. */
+.rows-empty::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--line);
+  border-radius: 8px 16px 10px 18px / 16px 8px 18px 10px;
+  filter: var(--stroke-filter);
+  pointer-events: none;
 }
 .rows-empty[data-in] {
   opacity: 1;
@@ -1106,6 +1232,57 @@ h1 {
   font-variant-numeric: tabular-nums;
   color: var(--muted);
 }
+.rows-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: color var(--d-hover) ease;
+}
+/* The cleared-list beat: the count goes to ink and a check draws itself
+   once. One quiet moment, asymmetric like the rest — it arrives, it does
+   not loop. */
+.rows-status[data-complete] .rows-count {
+  color: var(--ink);
+  animation: rows-count-pop var(--d-pop) var(--ease-spring);
+}
+.rows-count-check {
+  width: 1.05rem;
+  height: 1.05rem;
+  overflow: visible;
+}
+.rows-count-check path {
+  stroke-dasharray: 44;
+  stroke-dashoffset: 44;
+}
+.rows-status[data-complete] .rows-count-check path {
+  animation: rows-draw-check calc(var(--b-complete) * 2 * var(--t))
+    var(--ease-out) forwards;
+}
+@keyframes rows-count-pop {
+  0% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes rows-draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rows-status[data-complete] .rows-count {
+    animation: none;
+  }
+  /* No stroke draw, but the check must still be visible, not a stub. */
+  .rows-count-check path {
+    stroke-dashoffset: 0;
+  }
+}
 .rows-undo {
   display: inline-flex;
   align-items: center;
@@ -1114,6 +1291,7 @@ h1 {
   padding: 0.2rem var(--sp-2);
   border: 1.5px solid var(--ink);
   border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  filter: var(--stroke-filter);
   background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1177,6 +1355,7 @@ h1 {
   padding: 0.25rem var(--sp-3);
   border: 1.5px solid var(--line);
   border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  filter: var(--stroke-filter);
   background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1264,7 +1443,8 @@ input[type="range"] {
   margin-top: 0.15rem;
   padding: 0.2rem var(--sp-2);
   border: 1.5px solid var(--line);
-  border-radius: 4px;
+  border-radius: 4px 9px 5px 10px / 9px 4px 10px 5px;
+  filter: var(--stroke-filter);
   background: var(--paper);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -1406,4 +1586,159 @@ input[type="range"] {
   .bar-tab:active {
     transform: none;
   }
+}
+
+/* ============================================================
+   CLEAN SKIN — the second variant
+   A modern product UI: crisp geometry, a cool neutral palette
+   with one indigo accent, straight lines (the roughen filter is
+   switched off), even radii, and the reading faces back in a
+   clean sans. Everything below is scoped to [data-variant="clean"]
+   on <html>, so the organic default is untouched.
+   ============================================================ */
+[data-variant="clean"] {
+  --paper: #ffffff;
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --wash: #f5f5f7;
+  --ink: #18181b;
+  --muted: #71717a;
+  --line: #e4e4e7;
+  --line-strong: #18181b;
+  /* The action colour is a single modern accent, not black felt. */
+  --marker: #4f46e5;
+  --hilite: #fde68a;
+  --biro: #4f46e5;
+  --accent-ink: #4f46e5;
+  --focus: #4f46e5;
+  --shadow: 0 10px 30px rgba(24, 24, 27, 0.1);
+
+  --font-sans: var(--font-clean-sans);
+  --font-mono: var(--font-clean-mono);
+  --font-display: var(--font-clean-sans);
+
+  /* The whole hand-drawn apparatus is one property. Off, everything is
+     crisp. */
+  --stroke-filter: none;
+}
+
+/* Even corners everywhere. */
+[data-variant="clean"] .rows-check-box {
+  border-radius: 5px;
+}
+[data-variant="clean"] .rows-row,
+[data-variant="clean"] .rows-add-btn,
+[data-variant="clean"] .rows-undo,
+[data-variant="clean"] .bar-tab,
+[data-variant="clean"] .ctrl select,
+[data-variant="clean"] .rows-input-kbd,
+[data-variant="clean"] .rows-empty::before {
+  border-radius: 8px;
+}
+
+/* Title: no hand, no highlighter swipe, no doodle. The accent lands on
+   the word itself. */
+[data-variant="clean"] h1 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+[data-variant="clean"] .hl {
+  color: var(--marker);
+}
+[data-variant="clean"] .hl::before {
+  display: none;
+}
+[data-variant="clean"] .title-doodle {
+  display: none;
+}
+
+/* Checkbox: a modern control that fills with the accent when done. */
+[data-variant="clean"] .rows-check-box {
+  border-color: var(--muted);
+  transform: none;
+}
+[data-variant="clean"] .rows-check:hover .rows-check-box {
+  border-color: var(--marker);
+  transform: scale(1.08);
+}
+[data-variant="clean"] .rows-row[data-state="done"] .rows-check-box {
+  background: var(--marker);
+  border-color: var(--marker);
+  color: #fff;
+}
+/* A filled control stays full-strength and shows a white tick, rather than
+   dimming the way the inked organic box does. */
+[data-variant="clean"] .rows-row[data-state="done"] .rows-check {
+  opacity: 1;
+}
+[data-variant="clean"] .rows-row[data-state="done"] .rows-check path {
+  stroke: #fff;
+}
+
+/* Emphasis: a clean highlight rather than a chisel-tip swipe. */
+[data-variant="clean"] .rows-title-text::before {
+  border-radius: 3px;
+}
+
+/* Add button: a solid primary; it darkens rather than tilting. */
+[data-variant="clean"] .rows-add-btn {
+  border-color: var(--marker);
+  background: var(--marker);
+  color: #fff;
+}
+[data-variant="clean"] .rows-add-btn:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* The cleared-list check reads fine as a plain tick here. */
+[data-variant="clean"] .rows-count-check {
+  stroke-linecap: butt;
+}
+
+/* ---- the variant switch ----
+   A meta-control, not part of either artwork, so it stays a crisp pill in
+   both skins (no roughen filter) and simply adapts its colours. */
+.variant-toggle {
+  position: fixed;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  z-index: 40;
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.variant-opt {
+  padding: 0.28rem 0.75rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font-family: var(--font-clean-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    color var(--d-hover, 110ms) ease,
+    background-color var(--d-hover, 110ms) ease;
+}
+.variant-opt[data-active] {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* The heading-font switch sits under the skin switch and previews each face
+   in its own letters. */
+.heading-toggle {
+  top: calc(var(--sp-4) + 2.6rem);
+}
+.heading-toggle .variant-opt {
+  font-size: var(--text-sm);
+  line-height: 1.1;
 }
