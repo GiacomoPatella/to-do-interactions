@@ -88,13 +88,13 @@ const MAX_OVERSHOOT_PX = 14;
    because a row arriving at speed reads like a mistake. */
 const MOVE_EASES = {
   swap: {
-    label: "overshoot",
+    label: "Overshoot",
     value: "cubic-bezier(0.2, 1.15, 0.35, 1)",
   },
-  expo: { label: "expo out", value: "cubic-bezier(0.16, 1, 0.3, 1)" },
-  soft: { label: "soft out", value: "cubic-bezier(0.22, 1, 0.36, 1)" },
-  inout: { label: "in-out", value: "cubic-bezier(0.65, 0, 0.35, 1)" },
-  linear: { label: "linear", value: "linear" },
+  expo: { label: "Expo out", value: "cubic-bezier(0.16, 1, 0.3, 1)" },
+  soft: { label: "Soft out", value: "cubic-bezier(0.22, 1, 0.36, 1)" },
+  inout: { label: "In-out", value: "cubic-bezier(0.65, 0, 0.35, 1)" },
+  linear: { label: "Linear", value: "linear" },
 } as const;
 
 type MoveKey = keyof typeof MOVE_EASES;
@@ -134,13 +134,13 @@ const DEFAULTS: Params = {
 type DurationKey = Exclude<keyof Params, "timeScale" | "move">;
 
 const SLIDERS: { key: DurationKey; label: string }[] = [
-  { key: "draw", label: "add" },
-  { key: "complete", label: "complete" },
-  { key: "mark", label: "highlight" },
-  { key: "leave", label: "delete" },
-  { key: "reorder", label: "reorder" },
-  { key: "settle", label: "settle" },
-  { key: "enter", label: "enter" },
+  { key: "draw", label: "Add" },
+  { key: "complete", label: "Complete" },
+  { key: "mark", label: "Highlight" },
+  { key: "leave", label: "Delete" },
+  { key: "reorder", label: "Reorder" },
+  { key: "settle", label: "Settle" },
+  { key: "enter", label: "Enter" },
 ];
 
 const STORE_KEY = "gp-lab-rows-v1";
@@ -155,11 +155,11 @@ const STAGGER_MS = 40;
 /* First-visit seed: each sample row teaches one control. An empty list
    teaches nothing. */
 const SEED = [
-  "drag me somewhere else",
-  "complete me with space",
-  "rename me: focus, then enter",
-  "delete me, then press cmd z",
-  "press s for slow motion",
+  "Drag me somewhere else",
+  "Complete me with space",
+  "Rename me: focus, then enter",
+  "Delete me, then press cmd z",
+  "Press s for slow motion",
 ];
 
 let uidCounter = 0;
@@ -184,16 +184,16 @@ function clearTransitionAfter(el: HTMLElement, ms: number) {
 }
 
 const KEYS: [string, string][] = [
-  ["n", "new row"],
-  ["↑ ↓", "move focus"],
-  ["⏎", "edit row"],
-  ["esc", "cancel edit"],
-  ["space", "complete"],
-  ["h", "highlight"],
-  ["⌥ ↑↓", "reorder"],
-  ["⌫", "delete"],
-  ["⌘z", "undo delete"],
-  ["s", "slow motion"],
+  ["n", "New row"],
+  ["↑ ↓", "Move focus"],
+  ["⏎", "Edit row"],
+  ["esc", "Cancel edit"],
+  ["space", "Complete"],
+  ["h", "Highlight"],
+  ["⌥ ↑↓", "Reorder"],
+  ["⌫", "Delete"],
+  ["⌘z", "Undo delete"],
+  ["s", "Slow motion"],
 ];
 
 const GripDots = () => (
@@ -354,8 +354,8 @@ function FadeIn({
    also reaches the title, which lives outside this component. */
 type Variant = "organic" | "clean";
 const VARIANTS: { value: Variant; label: string }[] = [
-  { value: "organic", label: "organic" },
-  { value: "clean", label: "clean" },
+  { value: "organic", label: "Organic" },
+  { value: "clean", label: "Clean" },
 ];
 
 /* Heading-font options for the organic title, compared via their own toggle.
@@ -393,12 +393,26 @@ export default function RowsStudy() {
      <html> so it also reaches the title, which renders outside this tree. */
   const [variant, setVariant] = useState<Variant>("organic");
   const [heading, setHeading] = useState<Heading>("kalam");
+  /* Completed rows sink to the bottom (see toggleDone) and can be hidden
+     entirely once there. Both are quiet utility behaviour, not signature
+     moments, so neither gets a bespoke transition beyond what already
+     exists: sinking rides the ordinary FLIP glide, hiding is a plain
+     filter. */
+  const [hideDone, setHideDone] = useState(false);
+  /* A row that was just completed while hideDone is on stays rendered
+     for one more beat so its own tick-draw and strike can play, rather
+     than vanishing mid-animation the instant it becomes `done`. */
+  const [justCompleted, setJustCompleted] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     const stored = localStorage.getItem("gp-lab-variant");
     if (stored === "clean") setVariant("clean");
     const h = localStorage.getItem("gp-lab-heading");
     if (h === "playpen" || h === "architects") setHeading(h);
+    const hd = localStorage.getItem("gp-lab-hide-done");
+    if (hd === "true") setHideDone(true);
   }, []);
   useEffect(() => {
     document.documentElement.dataset.variant = variant;
@@ -408,6 +422,9 @@ export default function RowsStudy() {
     document.documentElement.dataset.heading = heading;
     localStorage.setItem("gp-lab-heading", heading);
   }, [heading]);
+  useEffect(() => {
+    localStorage.setItem("gp-lab-hide-done", String(hideDone));
+  }, [hideDone]);
 
   const studyRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -416,6 +433,7 @@ export default function RowsStudy() {
   const drawTimers = useRef(new Map<string, number>());
   const staggerTimer = useRef(0);
   const ghostTimers = useRef(new Map<string, number>());
+  const justCompletedTimers = useRef(new Map<string, number>());
   const prevTops = useRef<Map<string, number> | null>(null);
   const mutationKind = useRef<"settle" | "reorder">("settle");
   const reduced = useRef(false);
@@ -677,6 +695,15 @@ export default function RowsStudy() {
     });
   }, []);
 
+  const endJustCompleted = useCallback((id: string) => {
+    setJustCompleted((s) => {
+      if (!s.has(id)) return s;
+      const next = new Set(s);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
   /* ---- ghosts: two-frame flip to their "out" state so the exit has a
      painted start to leave from ---- */
   useLayoutEffect(() => {
@@ -735,12 +762,37 @@ export default function RowsStudy() {
     }
   }, [drawing, endDraw]);
 
+  /* ---- justCompleted lifecycle: a fixed grace window (the complete
+     transition plus a buffer), since there is no DOM event to hang it off
+     the way draw/ghost retire off their own animations ---- */
+  useEffect(() => {
+    const p = paramsRef.current;
+    justCompleted.forEach((id) => {
+      if (justCompletedTimers.current.has(id)) return;
+      justCompletedTimers.current.set(
+        id,
+        window.setTimeout(
+          () => endJustCompleted(id),
+          p.complete * p.timeScale + 200,
+        ),
+      );
+    });
+    for (const [id, timer] of justCompletedTimers.current) {
+      if (!justCompleted.has(id)) {
+        clearTimeout(timer);
+        justCompletedTimers.current.delete(id);
+      }
+    }
+  }, [justCompleted, endJustCompleted]);
+
   useEffect(() => {
     const dTimers = drawTimers.current;
     const gTimers = ghostTimers.current;
+    const jTimers = justCompletedTimers.current;
     return () => {
       dTimers.forEach((t) => clearTimeout(t));
       gTimers.forEach((t) => clearTimeout(t));
+      jTimers.forEach((t) => clearTimeout(t));
       clearTimeout(staggerTimer.current);
     };
   }, []);
@@ -765,15 +817,41 @@ export default function RowsStudy() {
     [snap, announce],
   );
 
+  /* Completing a row sinks it to the bottom of the list, below every row
+     still open; reopening it surfaces it again just above the done block.
+     Neither hunts for "its" original slot — that would need remembering a
+     position nothing else in this app tracks — so a reopened row rejoins
+     at the top of the open group rather than wherever it started. */
   const toggleDone = useCallback(
     (id: string) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
       const nowDone = !row.done;
-      setRows((r) => r.map((x) => (x.id === id ? { ...x, done: nowDone } : x)));
+      snap("reorder");
+      setRows((r) => {
+        const updated = r.map((x) =>
+          x.id === id ? { ...x, done: nowDone } : x,
+        );
+        const me = updated.find((x) => x.id === id) as Row;
+        const rest = updated.filter((x) => x.id !== id);
+        if (nowDone) return [...rest, me];
+        const at = rest.findIndex((x) => x.done);
+        const insertAt = at === -1 ? rest.length : at;
+        return [...rest.slice(0, insertAt), me, ...rest.slice(insertAt)];
+      });
+      if (nowDone && hideDone) {
+        setJustCompleted((s) => new Set(s).add(id));
+      } else if (!nowDone) {
+        setJustCompleted((s) => {
+          if (!s.has(id)) return s;
+          const next = new Set(s);
+          next.delete(id);
+          return next;
+        });
+      }
       announce(nowDone ? "row completed" : "row reopened");
     },
-    [rows, announce],
+    [rows, snap, announce, hideDone],
   );
 
   /* Emphasis. No snap() needed: nothing changes size or position, the
@@ -962,10 +1040,16 @@ export default function RowsStudy() {
     return () => window.removeEventListener("keydown", onKey);
   }, [undoable, undo, toggleSlow]);
 
-  /* ---- roving focus + keyboard operation of the list ---- */
-  const rovingId = rows.some((r) => r.id === focusId)
+  /* ---- roving focus + keyboard operation of the list ----
+     visibleRows drives both: a row hidden by hideDone must be unreachable
+     by arrow navigation, and cannot hold the roving tabIndex, or the list
+     loses its only focusable row. */
+  const visibleRows = hideDone
+    ? rows.filter((r) => !r.done || justCompleted.has(r.id))
+    : rows;
+  const rovingId = visibleRows.some((r) => r.id === focusId)
     ? focusId
-    : (rows[0]?.id ?? null);
+    : (visibleRows[0]?.id ?? null);
 
   function onListKeyDown(e: React.KeyboardEvent) {
     if (editing) return;
@@ -974,7 +1058,6 @@ export default function RowsStudy() {
     ) as HTMLLIElement | null;
     if (!li) return;
     const id = li.dataset.rowId as string;
-    const idx = rows.findIndex((r) => r.id === id);
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       const dir: -1 | 1 = e.key === "ArrowDown" ? 1 : -1;
@@ -982,7 +1065,8 @@ export default function RowsStudy() {
         moveRow(id, dir);
         return;
       }
-      const next = rows[idx + dir];
+      const idx = visibleRows.findIndex((r) => r.id === id);
+      const next = visibleRows[idx + dir];
       if (next) {
         setFocusId(next.id);
         rowEls.current.get(next.id)?.focus();
@@ -1169,6 +1253,13 @@ export default function RowsStudy() {
 
   /* ---- render ---- */
   const showEmpty = loaded && rows.length === 0 && ghosts.length === 0;
+  /* Distinct from showEmpty: the list is not empty, hideDone is just
+     hiding all of it. Saying "nothing left" here would be a lie. */
+  const showAllHidden =
+    loaded &&
+    rows.length > 0 &&
+    visibleRows.length === 0 &&
+    ghosts.length === 0;
 
   /* The footer reads as progress, not inventory: how much is off the list,
      not how much is on it. When the last one lands it earns a single quiet
@@ -1249,8 +1340,8 @@ export default function RowsStudy() {
             className="rows-input"
             type="text"
             value={draft}
-            placeholder="new row"
-            aria-label="new row"
+            placeholder="New row"
+            aria-label="New row"
             autoComplete="off"
             spellCheck={false}
             onChange={(e) => setDraft(e.target.value)}
@@ -1263,7 +1354,7 @@ export default function RowsStudy() {
           </kbd>
         </span>
         <button type="submit" className="rows-add-btn">
-          add
+          Add
         </button>
       </form>
 
@@ -1274,7 +1365,7 @@ export default function RowsStudy() {
           data-drag-active={draggingId ? "true" : undefined}
           onKeyDown={onListKeyDown}
         >
-          {rows.map((row, i) => {
+          {visibleRows.map((row, i) => {
             const isDrawing = drawing.has(row.id);
             const state =
               isDrawing || entering.has(row.id)
@@ -1428,9 +1519,19 @@ export default function RowsStudy() {
         {showEmpty && (
           <FadeIn className="rows-empty">
             <span>
-              nothing left · press <kbd>n</kbd> to add a row, or{" "}
+              Nothing left · press <kbd>n</kbd> to add a row, or{" "}
               <button type="button" onClick={reseed}>
                 restore the samples
+              </button>
+            </span>
+          </FadeIn>
+        )}
+        {showAllHidden && (
+          <FadeIn className="rows-empty">
+            <span>
+              All done · {doneCount} hidden ·{" "}
+              <button type="button" onClick={() => setHideDone(false)}>
+                show done
               </button>
             </span>
           </FadeIn>
@@ -1461,12 +1562,22 @@ export default function RowsStudy() {
                   strokeLinejoin="round"
                 />
               </svg>
-              all done
+              All done
             </>
           ) : (
             `${doneCount} of ${total} done`
           )}
         </span>
+        {doneCount > 0 && (
+          <button
+            type="button"
+            className="rows-hide-toggle"
+            aria-pressed={hideDone}
+            onClick={() => setHideDone((h) => !h)}
+          >
+            {hideDone ? "Show done" : "Hide done"}
+          </button>
+        )}
         <button
           type="button"
           className="rows-undo"
@@ -1474,7 +1585,7 @@ export default function RowsStudy() {
           tabIndex={undoable ? 0 : -1}
           onClick={undo}
         >
-          undo delete <kbd>⌘z</kbd>
+          Undo delete <kbd>⌘z</kbd>
         </button>
       </p>
 
@@ -1498,7 +1609,7 @@ export default function RowsStudy() {
                 </label>
               ))}
               <label className="ctrl">
-                <span>movement curve</span>
+                <span>Movement curve</span>
                 <output aria-hidden="true" />
                 <select
                   value={params.move}
@@ -1517,7 +1628,7 @@ export default function RowsStudy() {
               className="bar-reset"
               onClick={() => setParams(DEFAULTS)}
             >
-              reset to defaults
+              Reset to defaults
             </button>
           </div>
         )}
@@ -1544,7 +1655,7 @@ export default function RowsStudy() {
               a control in the bottom bar that says the opposite of what
               it does undoes the reason the bar exists. */}
           <label className="bar-speed">
-            <span>time</span>
+            <span>Time</span>
             <input
               type="range"
               min={0.25}
@@ -1564,7 +1675,7 @@ export default function RowsStudy() {
               aria-expanded={drawer === "timings"}
               onClick={() => setDrawer((d) => (d === "timings" ? null : "timings"))}
             >
-              timings
+              Timings
             </button>
             <button
               type="button"
@@ -1572,7 +1683,7 @@ export default function RowsStudy() {
               aria-expanded={drawer === "keys"}
               onClick={() => setDrawer((d) => (d === "keys" ? null : "keys"))}
             >
-              keys
+              Keys
             </button>
           </div>
         </div>

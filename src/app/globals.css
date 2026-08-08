@@ -149,6 +149,25 @@ body {
   line-height: 1.6;
 }
 
+/* Paper grain, organic only: the identity is a bright sheet of paper, and
+   a perfectly flat fill reads as a screen rather than a stock. Fine
+   fractal noise, multiplied at low opacity so it textures the paper
+   without ever being a pattern you'd notice on its own. Off entirely in
+   clean, which is a screen UI and should look like one. Fixed and behind
+   everything (z-index -1) rather than a body background-image, because a
+   background-image has no independent opacity — this needs its own box
+   to fade without washing out --paper underneath it. */
+html:not([data-variant="clean"]) body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.06;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
 /* Focus is biro blue everywhere, deliberately not the marker red action
    colour: "the system is talking to you" must never be confused with
    "this is the thing you just did". */
@@ -1283,6 +1302,29 @@ h1 {
     stroke-dashoffset: 0;
   }
 }
+/* A quiet utility toggle, not an action: styled as a link like "restore
+   the samples" rather than as a bordered pill, so it does not compete
+   with undo delete, the one thing in this row worth an accent. */
+.rows-hide-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  transition: color var(--d-hover) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-hide-toggle:hover {
+    color: var(--ink);
+  }
+}
+
 .rows-undo {
   display: inline-flex;
   align-items: center;
@@ -1508,6 +1550,7 @@ input[type="range"] {
 .rows-title:active,
 .rows-add-btn:active,
 .rows-undo:active,
+.rows-hide-toggle:active,
 .bar-tab:active,
 .rows-empty button:active {
   transform: scale(0.96);
