@@ -79,7 +79,7 @@
   /* ---- faces ----
      Two skins share this file. ORGANIC is the default: the hand is not
      confined to the marks, it sets everything, so the reading and
-     instrumentation faces are Patrick Hand. The CLEAN skin swaps --font-sans
+     instrumentation faces are Shantell Sans. The CLEAN skin swaps --font-sans
      and --font-mono back to the crisp pair further down. */
   --font-hand: var(--font-hand-src), "Comic Sans MS", cursive;
   --font-clean-sans: var(--font-text-src), ui-sans-serif, system-ui, sans-serif;
@@ -407,11 +407,15 @@ h1 {
    submits on its own (a form with one text field and no button submits
    implicitly). Leaving it empty on blur returns it to the link. */
 
+/* Same column geometry as .rows-row — auto icon, then the text — and the
+   same --sp-1 gap, so "Add New Task" starts on the exact pixel every row
+   title starts on. It reads as the row that does not exist yet, and that
+   only holds if the two columns line up. */
 .rows-add-composer {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1);
   cursor: text;
 }
 /* Sized and centred like a row's check button, so the drawn box below
@@ -496,7 +500,10 @@ h1 {
 }
 .rows-input {
   width: 100%;
-  padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-2);
+  /* Left padding is --sp-1 to match .rows-title and .rows-edit, not
+     --sp-2. See the grid gap on .rows-add-composer: the two together are
+     what put this text in the rows' text column. */
+  padding: var(--sp-2) 2.5rem var(--sp-2) var(--sp-1);
   border: 0;
   border-radius: 0;
   background: none;

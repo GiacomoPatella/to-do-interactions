@@ -22,28 +22,58 @@ the deliverable — the commented reasoning is what is actually being shown.
 
 ## Where it stands
 
-**The rebrand is done.** Identity is felt-tip sketchbook: bright paper, hand-drawn
-marks with uneven radii, one display face (Caveat) for the title only, Figtree for
-reading, DM Mono for instrumentation. Light mode only, on purpose — there is no
-`prefers-color-scheme` block and there should not be one.
+**The app is called To-Do To-Day.** Splitting *Today* into *To-Day* mirrors
+*To-Do*; the title highlights the second half. Light mode only, on purpose —
+there is no `prefers-color-scheme` block and there should not be one.
 
-The accent is **black felt-tip**, not a colour. It was marker red; the palette is
-now down to one colour with a job — the highlighter yellow — and everything else
-is ink on paper. Yellow is the only shout in the piece, which is what makes it
-land. Blue (`--biro`) is system-only: focus rings, never decoration.
+**Two skins ship, and both are keepers.** A pill toggle top-right sets
+`data-variant` on `<html>` (persisted as `gp-lab-variant`), and the whole
+difference is a token block plus `--stroke-filter`:
+
+- **organic** — the default. Felt-tip sketchbook: warm paper, uneven radii, every
+  straight edge displaced through the `#rough` SVG filter. The hand is not
+  confined to the marks, it sets the whole interface: Shantell Sans reads *and*
+  does the instrumentation, with Kalam on the title. A second toggle
+  (`data-heading`, organic only) swaps the title between Kalam / Playpen /
+  Architects; Kalam is the current pick. Caveat was tried and rejected — its
+  letterforms read badly at this size.
+- **clean** — Figtree, DM Mono, straight edges, `--stroke-filter: none`, one
+  indigo accent.
+
+The accent in **organic** is black felt-tip, not a colour. It was marker red; the
+palette is down to one colour with a job — the highlighter yellow — and
+everything else is ink on paper. Yellow is the only shout in the piece, which is
+what makes it land, and blue (`--biro`) is system-only: focus rings, never
+decoration. **clean** deliberately collapses that: one indigo does accent, focus
+and system, because a modern skin that hoarded three inks would be arguing with
+itself.
 
 **Signature moments, deliberately only two:** the add sweep (the rule draws itself
 in) and the delete (the row is drawn into its own bin). Everything else is quietly
 excellent rather than narrated. Restraint is what makes those two land — if a
 third metaphor appears, one of these should probably go.
 
-**Feature-complete.** The two candidates once flagged here — the empty state and
-the completed-row treatment — both ship now, as quiet work rather than signature
-moments: the empty state is a dashed hand-drawn frame with a restore link; the
-completed row mutes and strikes, and wipes any highlighter back off in the same
-move. Nothing else is committed, and that is the position, not a gap. A third
-narrated interaction would weaken the two that carry the piece. Add one only with
-a specific reason, and expect to retire something in exchange.
+**Feature-complete.** Everything once flagged here as a candidate ships now, all
+of it as quiet work rather than signature moments:
+
+- the empty state is a dashed hand-drawn frame with a restore link;
+- a completed row mutes and strikes, wipes any highlighter back off in the same
+  move, and sinks to the bottom of the list on the existing reorder FLIP;
+- **hide done** folds those rows away — each fades where it stood, on its own
+  ghost state, while the status line closes the gap. Not the bin: hiding isn't
+  destructive and must not borrow a destructive metaphor. Completing something
+  is the most common action in the app, so a just-completed row is held on
+  screen through its own tick and strike before the filter takes it, or the
+  filter would look like a bug;
+- **the add composer** is a link at rest — a checkbox-shaped plus and "Add New
+  Task" in the action colour, sharing the rows' column geometry so it reads as
+  the row that doesn't exist yet. The ruled line only appears once there is
+  something to edit. A persistent input box above the list looked like a form to
+  fill out rather than an invitation.
+
+Nothing else is committed, and that is the position, not a gap. A third narrated
+interaction would weaken the two that carry the piece. Add one only with a
+specific reason, and expect to retire something in exchange.
 
 ---
 
