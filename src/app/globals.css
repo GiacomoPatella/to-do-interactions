@@ -224,7 +224,7 @@ h1 {
   position: relative;
   width: fit-content;
   max-width: 100%;
-  margin: 0 0 var(--sp-6);
+  margin: 0 0 var(--sp-7);
   font-family: var(--font-display);
   font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
   font-weight: 700;
@@ -306,7 +306,11 @@ h1 {
   --t: 1;
   --b-press: 70ms;
   --b-hover: 90ms;
-  --b-enter: 130ms;
+  /* Matches --b-settle: an arriving row (undo, reseed, a row revealed by
+     "Show done") is a quiet moment, not a signature one, and now shares
+     its pace with the other quiet FLIP rather than being visibly the
+     quicker of the two. */
+  --b-enter: 170ms;
   /* Nudged up from 130: the shrink into the bin has further to travel
      than the old flick did, and below about 150 the lid and the row
      resolve on top of each other instead of in sequence. Still inside
@@ -317,6 +321,10 @@ h1 {
   --b-draw: 210ms;
   --b-complete: 120ms;
   --b-mark: 140ms;
+  /* Matches --b-settle too, for the same reason as --b-enter above: the
+     status line glides on --d-settle while a hidden row's ghost fades, so
+     the two finish in step instead of the fade racing ahead. */
+  --b-hide: 170ms;
   /* Per-row delay when a whole list arrives at once. Mirrors STAGGER_MS
      in RowsStudy.tsx. Short on purpose: past roughly 80ms a stagger stops
      reading as cascade and starts reading as lag. */
@@ -386,23 +394,79 @@ h1 {
   --d-complete: calc(var(--b-complete) * var(--t));
   --d-mark: calc(var(--b-mark) * var(--t));
   --d-stagger: calc(var(--b-stagger) * var(--t));
+  --d-hide: calc(var(--b-hide) * var(--t));
 }
 
-/* ---- add form ---- */
+/* ---- add form ----
+   No persistent input box, no submit button. At rest this reads as a
+   link — a checkbox-shaped plus and "Add New Task" in the action colour
+   — because a text field sitting empty above the list looked like a
+   form to fill out, not an invitation. The label wraps icon and input
+   together so a click anywhere in it focuses the input natively; typing
+   reveals the ruled line the row-editing inputs already use, and Enter
+   submits on its own (a form with one text field and no button submits
+   implicitly). Leaving it empty on blur returns it to the link. */
 
-.rows-add {
-  display: flex;
+.rows-add-composer {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   gap: var(--sp-2);
-  align-items: stretch;
+  cursor: text;
+}
+/* Sized and centred like a row's check button, so the drawn box below
+   (on ::before, so the roughen filter can wave it independently of the
+   svg) lines up exactly with every checkbox in the list. */
+.rows-add-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  color: var(--marker);
+}
+.rows-add-icon::before {
+  content: "";
+  position: absolute;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--ink);
+  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
+  filter: var(--stroke-filter);
+  transform: rotate(-1.5deg);
+  transition:
+    transform var(--d-hover) var(--ease-out),
+    border-color var(--d-hover) ease;
+}
+.rows-add-icon svg {
+  position: relative;
+  display: block;
+  overflow: visible;
+}
+.rows-add-icon path {
+  stroke: currentColor;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-add-composer:hover .rows-add-icon::before {
+    border-color: var(--marker);
+    transform: rotate(2deg) scale(1.12);
+    transition:
+      transform var(--d-pop) var(--ease-spring),
+      border-color var(--d-hover) ease;
+  }
+}
+.rows-add-composer:focus-within .rows-add-icon::before {
+  border-color: var(--marker);
 }
 .rows-input-wrap {
   position: relative;
-  flex: 1;
   min-width: 0;
   display: block;
 }
 /* A line to write on, not a box — and drawn on a pseudo so the roughen
-   filter waves the rule without wobbling what you type on it. */
+   filter waves the rule without wobbling what you type on it. Hidden at
+   rest: the ruled line is what makes this read as "now editing", so it
+   only belongs on screen once there is something to edit. */
 .rows-input-wrap::after {
   content: "";
   position: absolute;
@@ -412,8 +476,15 @@ h1 {
   height: 2px;
   background: var(--line);
   filter: var(--stroke-filter);
+  opacity: 0;
   pointer-events: none;
-  transition: background-color var(--d-hover) ease;
+  transition:
+    opacity var(--d-hover) ease,
+    background-color var(--d-hover) ease;
+}
+.rows-input-wrap:focus-within::after,
+.rows-input-wrap:has(.rows-input:not(:placeholder-shown))::after {
+  opacity: 1;
 }
 @media (hover: hover) and (pointer: fine) {
   .rows-input-wrap:hover::after {
@@ -435,6 +506,16 @@ h1 {
 }
 .rows-input::placeholder {
   color: var(--muted);
+}
+/* At rest — not focused, nothing typed — the placeholder is the link
+   text itself: "Add New Task" in the action colour, underlined. Once
+   focused the ruled line above takes over as the "you are editing"
+   signal, so the placeholder drops back to a plain hint. */
+.rows-add-composer:not(:focus-within) .rows-input::placeholder {
+  color: var(--marker);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
 }
 .rows-input:focus {
   outline: none;
@@ -463,32 +544,6 @@ h1 {
 .rows-input-wrap:focus-within .rows-input-kbd,
 .rows-input:not(:placeholder-shown) ~ .rows-input-kbd {
   opacity: 0;
-}
-.rows-add-btn {
-  padding: var(--sp-2) var(--sp-4);
-  border: 2px solid var(--ink);
-  /* Hand-drawn corners: uneven radii on both axes so no two corners
-     match. One declaration, and the button stops looking CSS-drawn. */
-  border-radius: 6px 14px 8px 16px / 14px 6px 16px 8px;
-  filter: var(--stroke-filter);
-  background: var(--paper);
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--ink);
-  cursor: pointer;
-  transition:
-    background-color var(--d-hover) ease,
-    border-color var(--d-hover) ease,
-    color var(--d-hover) ease,
-    transform var(--d-pop) var(--ease-spring);
-}
-@media (hover: hover) and (pointer: fine) {
-  .rows-add-btn:hover {
-    background: var(--marker);
-    border-color: var(--marker);
-    color: #fff;
-    transform: rotate(-1.5deg) scale(1.03);
-  }
 }
 
 /* ---- the list ---- */
@@ -539,10 +594,14 @@ h1 {
   border-radius: 5px 11px 6px 12px / 11px 5px 12px 6px;
   background: var(--bg);
   transition:
-    /* --ease-land, not a bouncy spring: --b-enter is a number the
-       timings drawer prints, so total has to equal visual. */
+    /* --ease-land on both legs, not a bouncy spring and not --ease-out.
+       --b-enter is a number the timings drawer prints, so total has to
+       equal visual — and a row arriving used to fade on --ease-out while
+       rising on --ease-land: two different rhythms on the same motion,
+       which is what read as a jitter rather than one coordinated
+       arrival. One curve for both properties reads as one movement. */
     transform var(--d-enter) var(--ease-land),
-    opacity var(--d-enter) var(--ease-out),
+    opacity var(--d-enter) var(--ease-land),
     filter var(--d-hover) ease,
     background-color var(--d-hover) ease;
 }
@@ -686,6 +745,37 @@ h1 {
 }
 .rows-row[data-state="leaving"][data-out] .rows-del-lid {
   transform: none;
+}
+
+/* Hiding: the "Hide done" toggle folding a row out of view, not deleting
+   it — so no bin, no convergence, just the row fading where it stood.
+   z-index 0 keeps it under the live, opaque rows (same reasoning as the
+   delete ghost) even though in practice nothing here overlaps it: rows
+   sunk to the bottom don't move when their neighbours below are hidden,
+   only the status line below the list glides up over the ordinary FLIP
+   effect to close the gap, on --d-settle — --b-hide defaults to the same
+   170ms so the fade and that glide finish together instead of the fade
+   racing ahead of it. Opacity-only, so reduced motion needs no separate
+   override — there was never a transform to strip. --ease-land, not
+   --ease-out: easeOutQuint front-loads almost the whole fade into the
+   first third of the duration, so at 130ms the row was already
+   effectively gone before the transition had finished — the tail end was
+   imperceptible, which read as a snap rather than a fade. --ease-land
+   spreads the change evenly across the full duration instead. */
+.rows-row[data-state="hiding"] {
+  position: absolute;
+  z-index: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  background: none;
+  transition: opacity var(--d-hide) var(--ease-land);
+}
+.rows-row[data-state="hiding"]::after {
+  opacity: 0;
+}
+.rows-row[data-state="hiding"][data-out] {
+  opacity: 0;
 }
 
 /* ---- row internals ---- */
@@ -1548,7 +1638,6 @@ input[type="range"] {
 
 /* ---- press feedback ---- */
 .rows-title:active,
-.rows-add-btn:active,
 .rows-undo:active,
 .rows-hide-toggle:active,
 .bar-tab:active,
@@ -1578,6 +1667,8 @@ input[type="range"] {
   .rows-study .rows-check-box,
   .rows-study .rows-check:hover .rows-check-box,
   .rows-study .rows-check:active .rows-check-box,
+  .rows-study .rows-add-icon::before,
+  .rows-study .rows-add-composer:hover .rows-add-icon::before,
   .rows-study .rows-del:hover svg,
   .rows-study .rows-del:active svg,
   .rows-study .rows-mark:hover svg,
@@ -1666,11 +1757,11 @@ input[type="range"] {
 }
 
 /* Even corners everywhere. */
-[data-variant="clean"] .rows-check-box {
+[data-variant="clean"] .rows-check-box,
+[data-variant="clean"] .rows-add-icon::before {
   border-radius: 5px;
 }
 [data-variant="clean"] .rows-row,
-[data-variant="clean"] .rows-add-btn,
 [data-variant="clean"] .rows-undo,
 [data-variant="clean"] .bar-tab,
 [data-variant="clean"] .ctrl select,
@@ -1695,12 +1786,16 @@ input[type="range"] {
   display: none;
 }
 
-/* Checkbox: a modern control that fills with the accent when done. */
-[data-variant="clean"] .rows-check-box {
+/* Checkbox: a modern control that fills with the accent when done. The
+   add composer's plus is the same control at rest, so it gets the same
+   treatment. */
+[data-variant="clean"] .rows-check-box,
+[data-variant="clean"] .rows-add-icon::before {
   border-color: var(--muted);
   transform: none;
 }
-[data-variant="clean"] .rows-check:hover .rows-check-box {
+[data-variant="clean"] .rows-check:hover .rows-check-box,
+[data-variant="clean"] .rows-add-composer:hover .rows-add-icon::before {
   border-color: var(--marker);
   transform: scale(1.08);
 }
@@ -1721,19 +1816,6 @@ input[type="range"] {
 /* Emphasis: a clean highlight rather than a chisel-tip swipe. */
 [data-variant="clean"] .rows-title-text::before {
   border-radius: 3px;
-}
-
-/* Add button: a solid primary; it darkens rather than tilting. */
-[data-variant="clean"] .rows-add-btn {
-  border-color: var(--marker);
-  background: var(--marker);
-  color: #fff;
-}
-[data-variant="clean"] .rows-add-btn:hover {
-  background: #4338ca;
-  border-color: #4338ca;
-  color: #fff;
-  transform: translateY(-1px);
 }
 
 /* The cleared-list check reads fine as a plain tick here. */

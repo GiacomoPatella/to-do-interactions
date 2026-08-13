@@ -49,7 +49,10 @@ type Row = { id: string; text: string; done: boolean; marked: boolean };
 /* A leaving row, pinned where it stood while its neighbours close the
    gap. The flick and the reduced-motion crossfade are the same
    transition with the transform dropped by the stylesheet. */
-type Ghost = { row: Row; top: number; out: boolean };
+/* kind distinguishes a deleted row (into the bin, see the "leaving"
+   data-state) from a hidden one (a plain quick fade, see "hiding") — two
+   different reasons a row leaves the flow, so two different exits. */
+type Ghost = { row: Row; top: number; out: boolean; kind: "delete" | "hide" };
 
 type DragState = {
   id: string;
@@ -108,6 +111,7 @@ type Params = {
   reorder: number;
   settle: number;
   enter: number;
+  hide: number;
   move: MoveKey;
 };
 
@@ -127,7 +131,8 @@ const DEFAULTS: Params = {
   leave: 150, // the shrink into the bin; see --b-leave in globals.css.
   reorder: 130, // fires repeatedly mid-drag, has to keep up with the pointer.
   settle: 170,
-  enter: 130,
+  enter: 170, // matches settle: an arriving row is a quiet moment, not a signature one.
+  hide: 170, // matches settle too, so the status line's glide and the fade finish together.
   move: "swap",
 };
 
@@ -141,6 +146,7 @@ const SLIDERS: { key: DurationKey; label: string }[] = [
   { key: "reorder", label: "Reorder" },
   { key: "settle", label: "Settle" },
   { key: "enter", label: "Enter" },
+  { key: "hide", label: "Hide" },
 ];
 
 const STORE_KEY = "gp-lab-rows-v1";
@@ -184,7 +190,7 @@ function clearTransitionAfter(el: HTMLElement, ms: number) {
 }
 
 const KEYS: [string, string][] = [
-  ["n", "New row"],
+  ["n", "Add new task"],
   ["↑ ↓", "Move focus"],
   ["⏎", "Edit row"],
   ["esc", "Cancel edit"],
@@ -218,6 +224,20 @@ const CheckMark = () => (
       strokeLinecap="round"
       strokeLinejoin="round"
       pathLength={1}
+    />
+  </svg>
+);
+
+/* The add composer's icon: a plus in the same hand-drawn box as the row
+   checkboxes, so the control reads as "a row waiting to exist" rather
+   than a stock button. Always fully drawn — nothing to toggle here. */
+const PlusMark = () => (
+  <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
+    <path
+      d="M6 2.2v7.6M2.2 6h7.6"
+      fill="none"
+      strokeWidth="1.6"
+      strokeLinecap="round"
     />
   </svg>
 );
@@ -666,7 +686,11 @@ export default function RowsStudy() {
         clearTransitionAfter(el, base * p.timeScale);
       }
     });
-  }, [rows, applyDragTransform]);
+    /* hideDone is a dependency in its own right: it changes visibleRows
+       without changing rows itself, and the status line (data-flip
+       ="status") still has to glide to its new spot when the list grows
+       or shrinks under it. */
+  }, [rows, hideDone, applyDragTransform]);
 
   /* ---- entering rows: two frames at their "from" state, then idle,
      so the transition has a painted start to leave ---- */
@@ -727,12 +751,10 @@ export default function RowsStudy() {
     const p = paramsRef.current;
     ghosts.forEach((g) => {
       if (ghostTimers.current.has(g.row.id)) return;
+      const base = g.kind === "hide" ? p.hide : p.leave;
       ghostTimers.current.set(
         g.row.id,
-        window.setTimeout(
-          () => retireGhost(g.row.id),
-          p.leave * p.timeScale + 500,
-        ),
+        window.setTimeout(() => retireGhost(g.row.id), base * p.timeScale + 500),
       );
     });
     for (const [id, timer] of ghostTimers.current) {
@@ -882,7 +904,7 @@ export default function RowsStudy() {
         // Pin the ghost at the row's visual position (mid-glide included).
         const rect = el.getBoundingClientRect();
         const top = rect.top - list.getBoundingClientRect().top;
-        setGhosts((gs) => [...gs, { row, top, out: false }]);
+        setGhosts((gs) => [...gs, { row, top, out: false, kind: "delete" }]);
       }
       setRows((r) => r.filter((x) => x.id !== id));
       setUndoable({ row, index });
@@ -915,6 +937,57 @@ export default function RowsStudy() {
     setUndoable(null);
     announce("row restored");
   }, [undoable, snap, announce]);
+
+  /* ---- hide/reveal done rows ----
+     A row hidden by the toggle is not deleted — it should read as an
+     accordion closing over it, not as the bin. Hiding ghosts each row at
+     its own last position (a plain fade, see "hiding" below) while the
+     status line glides up over the FLIP effect below; revealing gives
+     the same rows the ordinary row-arrival fade, not the add sweep, since
+     nothing new was created. justCompleted rows are already on screen
+     (see visibleRows), so neither direction touches them. */
+  const toggleHideDone = useCallback(() => {
+    const list = listRef.current;
+    const listRect = list?.getBoundingClientRect();
+    const affected = rows.filter((r) => r.done && !justCompleted.has(r.id));
+    const affectedIds = new Set(affected.map((r) => r.id));
+    const count = affected.length;
+    const noun = `${count} done row${count === 1 ? "" : "s"}`;
+    if (!hideDone) {
+      const newGhosts: Ghost[] = [];
+      if (listRect) {
+        for (const row of affected) {
+          const el = rowEls.current.get(row.id);
+          if (!el) continue;
+          const rect = el.getBoundingClientRect();
+          newGhosts.push({
+            row,
+            top: rect.top - listRect.top,
+            out: false,
+            kind: "hide",
+          });
+        }
+      }
+      snap();
+      setHideDone(true);
+      // A stale ghost from a hide/show toggled faster than its own fade
+      // is a second copy of a row that is once again live — see undo()
+      // for the same guard against the same lie.
+      setGhosts((gs) => [
+        ...gs.filter((g) => !affectedIds.has(g.row.id)),
+        ...newGhosts,
+      ]);
+      announce(`${noun} hidden`);
+    } else {
+      snap();
+      setHideDone(false);
+      setGhosts((gs) => gs.filter((g) => !affectedIds.has(g.row.id)));
+      if (count > 0) {
+        setEntering((s) => new Set([...s, ...affected.map((r) => r.id)]));
+      }
+      announce(`${noun} shown`);
+    }
+  }, [hideDone, rows, justCompleted, snap, announce]);
 
   const moveRow = useCallback(
     (id: string, dir: -1 | 1) => {
@@ -1279,6 +1352,7 @@ export default function RowsStudy() {
     "--b-draw": `${params.draw}ms`,
     "--b-complete": `${params.complete}ms`,
     "--b-mark": `${params.mark}ms`,
+    "--b-hide": `${params.hide}ms`,
     "--ease-move": MOVE_EASES[params.move].value,
   } as React.CSSProperties;
 
@@ -1334,28 +1408,35 @@ export default function RowsStudy() {
           setDraft("");
         }}
       >
-        <span className="rows-input-wrap">
-          <input
-            ref={inputRef}
-            className="rows-input"
-            type="text"
-            value={draft}
-            placeholder="New row"
-            aria-label="New row"
-            autoComplete="off"
-            spellCheck={false}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") e.currentTarget.blur();
-            }}
-          />
-          <kbd className="rows-input-kbd" aria-hidden="true">
-            n
-          </kbd>
-        </span>
-        <button type="submit" className="rows-add-btn">
-          Add
-        </button>
+        {/* A label, not a button: clicking anywhere in it — icon or
+            placeholder text — focuses the input natively, no click
+            handler needed. Enter submits on its own, since a form with a
+            single text field implicitly submits on Enter with no button
+            present. */}
+        <label className="rows-add-composer">
+          <span className="rows-add-icon" aria-hidden="true">
+            <PlusMark />
+          </span>
+          <span className="rows-input-wrap">
+            <input
+              ref={inputRef}
+              className="rows-input"
+              type="text"
+              value={draft}
+              placeholder="Add New Task"
+              aria-label="Add new task"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") e.currentTarget.blur();
+              }}
+            />
+            <kbd className="rows-input-kbd" aria-hidden="true">
+              n
+            </kbd>
+          </span>
+        </label>
       </form>
 
       <div className="rows-listbox">
@@ -1491,12 +1572,14 @@ export default function RowsStudy() {
               pinned to their last box) so siblings close the gap via
               FLIP while the ghost flicks away where it stood. It sits
               below the live rows, which are opaque, so the closing list
-              wipes over it cleanly. */}
+              wipes over it cleanly. A hidden (not deleted) row gets the
+              plain "hiding" fade instead of the bin convergence — hiding
+              isn't destructive, so it shouldn't borrow that metaphor. */}
           {ghosts.map((g) => (
             <li
               key={`ghost-${g.row.id}`}
               className="rows-row"
-              data-state="leaving"
+              data-state={g.kind === "hide" ? "hiding" : "leaving"}
               data-out={g.out ? "true" : undefined}
               data-done={g.row.done ? "true" : undefined}
               /* Without this a highlighted row lost its swipe the instant
@@ -1530,7 +1613,7 @@ export default function RowsStudy() {
           <FadeIn className="rows-empty">
             <span>
               All done · {doneCount} hidden ·{" "}
-              <button type="button" onClick={() => setHideDone(false)}>
+              <button type="button" onClick={toggleHideDone}>
                 show done
               </button>
             </span>
@@ -1573,7 +1656,7 @@ export default function RowsStudy() {
             type="button"
             className="rows-hide-toggle"
             aria-pressed={hideDone}
-            onClick={() => setHideDone((h) => !h)}
+            onClick={toggleHideDone}
           >
             {hideDone ? "Show done" : "Hide done"}
           </button>
