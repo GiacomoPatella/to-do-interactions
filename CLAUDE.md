@@ -7,6 +7,17 @@ Read `src/components/RowsStudy.tsx` before changing anything: it is heavily
 commented and the animation system is not obvious. `src/app/globals.css` owns
 every visual state; the component owns timing and layout.
 
+`INBOX.md` is Giacomo's braindump. Raw lines land in **Dump** with no format or
+category — reading and categorising them is your job, not his. Move each one
+into **Triaged** with your interpretation attached; never act straight from the
+dump, and never delete from it. Anything you'd file as **direction** collides
+with a settled decision below and needs a conversation, not a commit.
+
+It is **gitignored on purpose** — a working scratchpad, not part of the
+deliverable, and it holds unbuilt ideas that shouldn't ship with the source. It
+lives on Giacomo's machine only, so expect it to be absent from a fresh clone.
+Don't commit it, and don't recreate it as a tracked file.
+
 **This is a standalone project.** It is not part of the gpcodes.com portfolio and
 must not look like it. Giacomo's portfolio links out to this; it does not contain
 it. An earlier session built it inside the portfolio repo by mistake and it was

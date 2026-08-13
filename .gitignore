@@ -4,3 +4,7 @@ out/
 .DS_Store
 *.tsbuildinfo
 next-env.d.ts
+
+# The braindump inbox. Deliberately untracked: it is a working scratchpad,
+# not part of the deliverable. See CLAUDE.md.
+INBOX.md
