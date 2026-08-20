@@ -70,6 +70,13 @@
   --marker: #17150f; /* black felt  — the action colour */
   --hilite: #ffe600; /* highlighter — emphasis, never completion */
   --biro: #2b7fff; /* blue ink    — focus, system */
+  /* White text directly on --biro (the skip-link only) fails WCAG AA at
+     this lightness (3.8:1, needs 4.5:1) — a real contrast bug, not a
+     design call, since it's white-on-fixed-background with nowhere left
+     for the text side to move. --biro itself stays untouched everywhere
+     else (focus rings are a 3:1 non-text requirement they already
+     clear); this is scoped to that one text-on-fill use. */
+  --biro-on-fill: #1f6fe0;
 
   --accent-ink: var(--marker);
   --focus: var(--biro);
@@ -197,7 +204,7 @@ html:not([data-variant="clean"]) body::before {
   z-index: 100;
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-sm);
-  background: var(--biro);
+  background: var(--biro-on-fill);
   color: #fff;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
@@ -933,7 +940,8 @@ h1 {
      short, plain decelerate. */
   transition:
     transform var(--d-hover) var(--ease-out),
-    border-color var(--d-hover) ease;
+    border-color var(--d-hover) ease,
+    background-color var(--d-hover) ease;
 }
 @media (hover: hover) and (pointer: fine) {
   /* Tilts the other way and grows: the box reacts before it is pressed. */
@@ -1547,6 +1555,14 @@ h1 {
   margin-inline: auto;
   padding: var(--sp-4) var(--sp-4) var(--sp-3);
   border-bottom: 1.5px dashed var(--line);
+  /* Was a hard snap into existence; the empty states already get a
+     mount-fade via FadeIn (see .rows-empty), this just brings the
+     drawer in line with its sibling. */
+  opacity: 0;
+  transition: opacity var(--d-enter) var(--ease-out);
+}
+.bar-drawer[data-in] {
+  opacity: 1;
 }
 
 .ctrls {
@@ -1648,6 +1664,8 @@ input[type="range"] {
 .rows-undo:active,
 .rows-hide-toggle:active,
 .bar-tab:active,
+.bar-reset:active,
+.variant-opt:active,
 .rows-empty button:active {
   transform: scale(0.96);
 }
@@ -1750,6 +1768,8 @@ input[type="range"] {
   --marker: #4f46e5;
   --hilite: #fde68a;
   --biro: #4f46e5;
+  /* Already ~6.3:1 white-on-fill — passes AA as-is, no adjustment needed. */
+  --biro-on-fill: #4f46e5;
   --accent-ink: #4f46e5;
   --focus: #4f46e5;
   --shadow: 0 10px 30px rgba(24, 24, 27, 0.1);

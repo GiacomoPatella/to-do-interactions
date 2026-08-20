@@ -189,6 +189,35 @@ function clearTransitionAfter(el: HTMLElement, ms: number) {
   timer = window.setTimeout(clear, ms + 100);
 }
 
+/** Where in a row's text did this click land? Read against the *display*
+    text (a real, possibly-wrapped text node) before it gets swapped for
+    the single-line edit input, so a click on a later wrapped line still
+    resolves to the right character — the input itself never wraps, but a
+    character index is wrap-independent, so the same number is valid on
+    both sides of the swap. Returns null if the point didn't resolve to
+    real text (e.g. a click that lands in the row's padding), and the
+    caller falls back to placing the caret at the end. */
+function caretOffsetFromPoint(x: number, y: number): number | null {
+  const withLegacy = document as Document & {
+    caretPositionFromPoint?: (
+      x: number,
+      y: number,
+    ) => { offsetNode: Node; offset: number } | null;
+  };
+  if (document.caretRangeFromPoint) {
+    const range = document.caretRangeFromPoint(x, y);
+    if (range?.startContainer.nodeType === Node.TEXT_NODE) {
+      return range.startOffset;
+    }
+    return null;
+  }
+  if (withLegacy.caretPositionFromPoint) {
+    const pos = withLegacy.caretPositionFromPoint(x, y);
+    if (pos?.offsetNode.nodeType === Node.TEXT_NODE) return pos.offset;
+  }
+  return null;
+}
+
 const KEYS: [string, string][] = [
   ["n", "Add new task"],
   ["↑ ↓", "Move focus"],
@@ -198,7 +227,7 @@ const KEYS: [string, string][] = [
   ["h", "Highlight"],
   ["⌥ ↑↓", "Reorder"],
   ["⌫", "Delete"],
-  ["⌘z", "Undo delete"],
+  ["⌘z", "Undo"],
   ["s", "Slow motion"],
 ];
 
@@ -396,12 +425,21 @@ export default function RowsStudy() {
      reseed keep the plain enter, because drawing a fresh line is a claim
      about newness and a restored row is not new. */
   const [drawing, setDrawing] = useState<ReadonlySet<string>>(new Set());
-  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(
-    null,
-  );
-  const [undoable, setUndoable] = useState<{ row: Row; index: number } | null>(
-    null,
-  );
+  const [editing, setEditing] = useState<
+    { id: string; draft: string; caret?: number } | null
+  >(null);
+  /* Single-slot undo: the last destructive action, whichever it was.
+     Delete restores the row at its old index; edit restores the text a
+     click-to-rename silently overwrote — clicking a row's title selects
+     its whole text, so a stray keystroke (including this app's own
+     single-letter shortcuts) can wipe a title with no other recovery
+     path. Not a stack: only the most recent destructive action is ever
+     undoable, matching how the status line has only room to name one. */
+  const [undoable, setUndoable] = useState<
+    | { kind: "delete"; row: Row; index: number }
+    | { kind: "edit"; id: string; text: string }
+    | null
+  >(null);
   const [params, setParams] = useState<Params>(DEFAULTS);
   const [drawer, setDrawer] = useState<null | "timings" | "keys">(null);
   const [staggering, setStaggering] = useState(false);
@@ -907,7 +945,7 @@ export default function RowsStudy() {
         setGhosts((gs) => [...gs, { row, top, out: false, kind: "delete" }]);
       }
       setRows((r) => r.filter((x) => x.id !== id));
-      setUndoable({ row, index });
+      setUndoable({ kind: "delete", row, index });
       announce("row deleted, press command z to undo");
       // Focus must not die with the row.
       if (hadFocus) {
@@ -924,18 +962,24 @@ export default function RowsStudy() {
 
   const undo = useCallback(() => {
     if (!undoable) return;
-    const { row, index } = undoable;
     snap();
-    // If the ghost of this row is still leaving, retire it now: two
-    // copies of the same row on screen would be a lie.
-    setGhosts((gs) => gs.filter((g) => g.row.id !== row.id));
-    setRows((r) => {
-      const at = Math.min(index, r.length);
-      return [...r.slice(0, at), row, ...r.slice(at)];
-    });
-    setEntering((s) => new Set(s).add(row.id));
+    if (undoable.kind === "delete") {
+      const { row, index } = undoable;
+      // If the ghost of this row is still leaving, retire it now: two
+      // copies of the same row on screen would be a lie.
+      setGhosts((gs) => gs.filter((g) => g.row.id !== row.id));
+      setRows((r) => {
+        const at = Math.min(index, r.length);
+        return [...r.slice(0, at), row, ...r.slice(at)];
+      });
+      setEntering((s) => new Set(s).add(row.id));
+      announce("row restored");
+    } else {
+      const { id, text } = undoable;
+      setRows((r) => r.map((x) => (x.id === id ? { ...x, text } : x)));
+      announce("edit undone");
+    }
     setUndoable(null);
-    announce("row restored");
   }, [undoable, snap, announce]);
 
   /* ---- hide/reveal done rows ----
@@ -1030,13 +1074,16 @@ export default function RowsStudy() {
     announce("sample rows restored");
   }, [snap, announce]);
 
-  /* ---- editing ---- */
+  /* ---- editing ----
+     caret is undefined for the keyboard path (Enter has no click point to
+     read) and for anything that didn't resolve to real text; the input's
+     own onFocus falls back to end-of-text in that case. */
   const startEdit = useCallback(
-    (id: string) => {
+    (id: string, caret?: number) => {
       const row = rows.find((r) => r.id === id);
       if (!row) return;
       editClosed.current = false;
-      setEditing({ id, draft: row.text });
+      setEditing({ id, draft: row.text, caret });
     },
     [rows],
   );
@@ -1045,9 +1092,11 @@ export default function RowsStudy() {
     if (!editing) return;
     const t = editing.draft.trim();
     const id = editing.id;
-    if (t && t !== rows.find((r) => r.id === id)?.text) {
+    const prev = rows.find((r) => r.id === id)?.text;
+    if (t && prev !== undefined && t !== prev) {
       setRows((r) => r.map((x) => (x.id === id ? { ...x, text: t } : x)));
-      announce("row renamed");
+      setUndoable({ kind: "edit", id, text: prev });
+      announce("row renamed, press command z to undo");
     }
     setEditing(null);
     requestAnimationFrame(() => rowEls.current.get(id)?.focus());
@@ -1510,7 +1559,28 @@ export default function RowsStudy() {
                     value={editing.draft}
                     aria-label="edit row text"
                     autoFocus
-                    onFocus={(e) => e.currentTarget.select()}
+                    /* Caret where you clicked, not select-all: this app's
+                       single-letter shortcuts (h, space, backspace...)
+                       fire on a bare focused row with no modifier key, so
+                       select-all-on-edit meant the first keystroke after
+                       a click silently replaced the entire title. Landing
+                       the caret at the click point instead means a stray
+                       shortcut key only inserts a character where you
+                       clicked — obviously wrong and trivially fixed, not
+                       a silent full wipe. (⌘Z still recovers either way.)
+                       The offset was read from the display text at click
+                       time, before it swapped for this input — see
+                       caretOffsetFromPoint and the button below. Enter
+                       (no click point) and anything that missed real text
+                       fall back to the end. */
+                    onFocus={(e) => {
+                      const len = e.currentTarget.value.length;
+                      const at =
+                        editing.caret === undefined
+                          ? len
+                          : Math.max(0, Math.min(editing.caret, len));
+                      e.currentTarget.setSelectionRange(at, at);
+                    }}
                     onChange={(e) =>
                       setEditing((ed) => ed && { ...ed, draft: e.target.value })
                     }
@@ -1538,7 +1608,13 @@ export default function RowsStudy() {
                     type="button"
                     className="rows-title"
                     tabIndex={-1}
-                    onClick={() => startEdit(row.id)}
+                    onClick={(e) =>
+                      startEdit(
+                        row.id,
+                        caretOffsetFromPoint(e.clientX, e.clientY) ??
+                          undefined,
+                      )
+                    }
                   >
                     <span className="rows-title-text">{row.text}</span>
                   </button>
@@ -1668,14 +1744,15 @@ export default function RowsStudy() {
           tabIndex={undoable ? 0 : -1}
           onClick={undo}
         >
-          Undo delete <kbd>⌘z</kbd>
+          {undoable?.kind === "edit" ? "Undo edit" : "Undo delete"}{" "}
+          <kbd>⌘z</kbd>
         </button>
       </p>
 
       {/* ---- the bottom bar ---- */}
       <div className="bar">
         {drawer === "timings" && (
-          <div className="bar-drawer">
+          <FadeIn className="bar-drawer">
             <div className="ctrls">
               {SLIDERS.map(({ key, label }) => (
                 <label className="ctrl" key={key}>
@@ -1713,11 +1790,11 @@ export default function RowsStudy() {
             >
               Reset to defaults
             </button>
-          </div>
+          </FadeIn>
         )}
 
         {drawer === "keys" && (
-          <div className="bar-drawer">
+          <FadeIn className="bar-drawer">
             <dl className="keys">
               {KEYS.map(([k, v]) => (
                 <div key={k}>
@@ -1728,7 +1805,7 @@ export default function RowsStudy() {
                 </div>
               ))}
             </dl>
-          </div>
+          </FadeIn>
         )}
 
         <div className="bar-strip">

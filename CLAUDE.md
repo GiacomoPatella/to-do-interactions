@@ -215,6 +215,12 @@ exactly this failure, and it survived a long time.
   ceiling — they meet at exactly 0px overlap. Two interactive elements must never
   share a pixel.
 - `npm run build` must pass.
+- **`--muted` sits at 3.8:1 contrast, below WCAG AA's 4.5:1, on purpose.**
+  Flagged in an accessibility pass 2026-08-20 across its 15+ uses (completed
+  rows, status line, disabled states); Giacomo's ruling was "muted is fine" —
+  the dimness is the deliberate "recede" signal for secondary content, and
+  pushing it to full AA contrast would fight that everywhere it's used at
+  once. Don't re-flag or "fix" this without a specific reason to revisit it.
 
 ## Traps that have already been sprung once
 
