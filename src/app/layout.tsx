@@ -78,11 +78,11 @@ export default function RootLayout({
             jumped the whole app on load. Desk is the default. */}
         <script
           dangerouslySetInnerHTML={{
-            /* The desk's notepad too, for the same reason: its binding
-               changes the page's layout. TEMPORARY comparison overrides,
-               to delete once settled: ?book=agenda brings back the
-               two-page spread, ?binding=tape the glued head. */
-            __html: `try{var v=localStorage.getItem("gp-lab-variant");document.documentElement.dataset.variant=v==="organic"||v==="clean"?v:"desk"}catch(e){document.documentElement.dataset.variant="desk"}try{var q=new URLSearchParams(location.search);document.documentElement.dataset.book=q.get("book")==="agenda"?"agenda":"notepad";document.documentElement.dataset.binding=q.get("binding")==="tape"?"tape":"spiral"}catch(e){}`,
+            /* The desk's notepad binding too, for the same reason: it
+               changes the page's layout. TEMPORARY comparison override,
+               to delete once settled: ?binding=tape shows the glued head
+               the spiral replaced. */
+            __html: `try{var v=localStorage.getItem("gp-lab-variant");document.documentElement.dataset.variant=v==="organic"||v==="clean"?v:"desk"}catch(e){document.documentElement.dataset.variant="desk"}try{var q=new URLSearchParams(location.search);document.documentElement.dataset.binding=q.get("binding")==="tape"?"tape":"spiral"}catch(e){}`,
           }}
         />
       </head>

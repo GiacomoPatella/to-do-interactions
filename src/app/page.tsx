@@ -16,7 +16,7 @@ export default function Home() {
       </a>
 
       <main id="main" className="wrap">
-        {/* The desk skin's agenda / notepad. Renders nothing visible in
+        {/* The desk skin's notepad. Renders nothing visible in
             organic or clean. */}
         <Booklet />
         <h1>

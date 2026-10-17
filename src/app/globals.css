@@ -2009,8 +2009,8 @@ html[data-variant="desk"] .wrap {
   padding: var(--sp-7) clamp(var(--sp-4), 6vw, var(--sp-7));
   justify-content: flex-start;
 }
-/* The sheet itself, under the content. This base is the NOTEPAD — the
-   agenda overrides it further down. A glued-head pad is bound along the
+/* The sheet itself, under the content. This base is the glued-head
+   pad; the spiral overrides it further down. A glued-head pad is bound along the
    top, so the pages under this one show only at the bottom edge: the
    stepped hard shadows, alternating tone so the leaves separate, each a
    hair lower than the last because a pad's pages never sit perfectly
@@ -2056,17 +2056,12 @@ html[data-variant="desk"] .wrap::after {
   }
 }
 
-/* ---- the booklet: agenda and notepad ----
+/* ---- the notepad ----
    The stationery Booklet.tsx renders around the page. Hidden in every
-   skin but desk, so organic and clean never see any of it. Which format
-   shows is data-book on <html>, set before first paint by layout.tsx:
-   agenda from 60rem up (see book.ts), notepad below. */
+   skin but desk, so organic and clean never see any of it. */
 .book-cover,
-.book-verso,
-.book-spine,
 .book-binding,
-.book-used,
-.book-date {
+.book-used {
   display: none;
 }
 
@@ -2077,10 +2072,9 @@ html[data-variant="desk"] .wrap::after {
    coils is a dozen tiny drawn objects all asking to be looked at, and
    they have to stick up past the page to read as coils at all. Tape is
    one quiet shape, and a pad whose pages flip over the top is the right
-   object to turn at midnight. The same near-black as the agenda's cover,
-   so both read as the same stationery. Above the tooth: it's tape, not
+   object to turn at midnight. Above the tooth: it's tape, not
    paper. */
-html[data-variant="desk"][data-binding="tape"]:not([data-book="agenda"]) .book-binding {
+html[data-variant="desk"][data-binding="tape"] .book-binding {
   display: block;
   position: absolute;
   z-index: 31;
@@ -2102,7 +2096,7 @@ html[data-variant="desk"][data-binding="tape"]:not([data-book="agenda"]) .book-b
     0 1px 2px rgba(20, 10, 4, 0.35);
 }
 /* The text clears the tape. */
-html[data-variant="desk"][data-binding="tape"]:not([data-book="agenda"]) .wrap {
+html[data-variant="desk"][data-binding="tape"] .wrap {
   padding-top: calc(var(--sp-7) + 0.75rem);
 }
 
@@ -2121,18 +2115,18 @@ html[data-variant="desk"][data-binding="tape"]:not([data-book="agenda"]) .wrap {
      away, a soft shadow on the page. The pitch is a real notebook's
      (6mm at A5 scale), so it reads as a coil and not a pattern; `space`
      only ever draws whole loops and spreads them to fit the width. */
-html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+html[data-variant="desk"]:not([data-binding="tape"])
   .wrap {
   padding-top: calc(var(--sp-7) + 1rem);
   margin-top: calc(var(--sp-6) + 1.25rem);
 }
 @media (max-width: 40rem) {
-  html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+  html[data-variant="desk"]:not([data-binding="tape"])
     .wrap {
     margin-top: calc(var(--sp-4) + 8.4rem + 1.25rem);
   }
 }
-html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+html[data-variant="desk"]:not([data-binding="tape"])
   .wrap::before {
   border-radius: 1px 1px 2px 2px;
   box-shadow:
@@ -2152,7 +2146,7 @@ html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
     -4px 6.5px 0 #e9e1cf,
     0 7px 3px rgba(20, 10, 4, 0.3);
 }
-html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+html[data-variant="desk"]:not([data-binding="tape"])
   .book-cover {
   display: block;
   position: absolute;
@@ -2177,7 +2171,7 @@ html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
     4px 12px 26px rgba(20, 10, 4, 0.38),
     10px 30px 60px rgba(20, 10, 4, 0.25);
 }
-html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+html[data-variant="desk"]:not([data-binding="tape"])
   .book-used {
   display: block;
   position: absolute;
@@ -2198,7 +2192,7 @@ html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
   border-top: 2.5px solid #9c774d;
   box-shadow: 0 -1px 2px rgba(20, 10, 4, 0.3);
 }
-html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
+html[data-variant="desk"]:not([data-binding="tape"])
   .book-binding {
   display: block;
   position: absolute;
@@ -2210,231 +2204,4 @@ html[data-variant="desk"]:not([data-binding="tape"]):not([data-book="agenda"])
   pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='48'%3E%3Cdefs%3E%3CradialGradient id='h' cx='.5' cy='.35' r='.6'%3E%3Cstop offset='0' stop-color='%23140f0b'/%3E%3Cstop offset='.7' stop-color='%232a221b'/%3E%3Cstop offset='1' stop-color='%235a4e42'/%3E%3C/radialGradient%3E%3Cfilter id='s' x='-50%25' y='-50%25' width='200%25' height='200%25'%3E%3CfeGaussianBlur stdDeviation='1.1'/%3E%3C/filter%3E%3C/defs%3E%3Ccircle cx='8' cy='36' r='3.6' fill='url(%23h)'/%3E%3Cpath d='M5 38.6a3.6 3.6 0 0 0 6 0' fill='none' stroke='%23fff' stroke-opacity='.7' stroke-width='.6'/%3E%3Cpath d='M14.5 6C19.5 4.5 21.5 12 21 20' fill='none' stroke='%2329292b' stroke-width='3.4' stroke-linecap='round'/%3E%3Cpath d='M14.5 6C19.5 4.5 21.5 12 21 20' fill='none' stroke='%23707378' stroke-width='2.2' stroke-linecap='round'/%3E%3Cpath d='M10.2 36C9.7 25 11.2 11 16.7 9.5' fill='none' stroke='%232a1608' stroke-opacity='.4' stroke-width='3.2' stroke-linecap='round' filter='url(%23s)'/%3E%3Cpath d='M8 35.4C7.5 24 9 8 14.5 6' fill='none' stroke='%232b2c2f' stroke-width='3.6' stroke-linecap='round'/%3E%3Cpath d='M8 35.4C7.5 24 9 8 14.5 6' fill='none' stroke='%23a7aaaf' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M7.4 34C6.9 23.5 8.4 8.4 13.6 6.2' fill='none' stroke='%23f6f7f8' stroke-opacity='.85' stroke-width='.9' stroke-linecap='round'/%3E%3C/svg%3E") 0 0 / 24px 48px;
   background-repeat: space no-repeat;
-}
-
-/* Agenda: a page-a-day diary lying open. .wrap stays today's page — the
-   live app, unrotated and untransformed, so FLIP measures exactly what it
-   always has — and everything else is placed around it: yesterday's leaf
-   to its left, the spine shading across the join, the cover under both.
-   The spread is centred by starting today's page at the middle of the
-   desk. When forced narrower than a spread fits (the temporary ?book=
-   override), today's page keeps a readable width against the right edge
-   and yesterday becomes a sliver at the left, which is the plan for
-   phones if the agenda ever goes there. */
-html[data-variant="desk"][data-book="agenda"] .wrap {
-  --page-w: clamp(20rem, calc(50% - 2rem), 34rem);
-  width: var(--page-w);
-  max-width: none;
-  margin-left: min(50%, calc(100% - var(--page-w) - var(--sp-3)));
-  margin-right: 0;
-  /* The style toggles stack top-right, and at any ordinary laptop width
-     the spread reaches under them and they sat on the printed date.
-     Start the book below them, as the phone layout already does. */
-  margin-top: calc(var(--sp-4) + 8.4rem);
-}
-/* Today's page: square at the spine, rounded at the fore-edge, with the
-   days still to come stacked under its outer edge (see stackEdges in
-   Booklet.tsx — the year's thickness, split at today). Only a contact
-   shadow here: the book as a whole casts the soft ones, from the cover. */
-html[data-variant="desk"][data-book="agenda"] .wrap::before {
-  border-radius: 0 3px 3px 0;
-  box-shadow:
-    var(
-      --recto-edges,
-      1px 0 0 #efe9da,
-      2px 0 0 #fbf8ef,
-      3px 1px 0 #e9e2d0,
-      4px 1px 0 #f7f3e8
-    ),
-    0 1px 2px rgba(30, 15, 5, 0.18);
-}
-/* The cover, just proud of the pages all round, under everything. It
-   carries the book's shadow on the desk. */
-html[data-variant="desk"][data-book="agenda"] .book-cover {
-  display: block;
-  position: absolute;
-  z-index: -2;
-  top: -0.6rem;
-  bottom: -0.6rem;
-  left: calc(-100% - 0.75rem);
-  right: -0.75rem;
-  border-radius: 5px;
-  pointer-events: none;
-  background:
-    linear-gradient(
-      90deg,
-      transparent 49%,
-      rgba(0, 0, 0, 0.35) 50%,
-      transparent 51%
-    ),
-    linear-gradient(180deg, #342d27, #26201c);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 245, 230, 0.05),
-    0 2px 3px rgba(30, 15, 5, 0.3),
-    4px 10px 24px rgba(30, 15, 5, 0.35),
-    10px 30px 60px rgba(30, 15, 5, 0.28);
-}
-/* Yesterday's leaf, already turned: the left-hand page. Its own stacking
-   context (the z-index), so its tooth multiplies only into it. The days
-   gone are stacked under its outer edge. */
-html[data-variant="desk"][data-book="agenda"] .book-verso {
-  display: block;
-  position: absolute;
-  z-index: -1;
-  top: 0;
-  bottom: 0;
-  right: 100%;
-  width: 100%;
-  overflow: hidden;
-  border-radius: 3px 0 0 3px;
-  pointer-events: none;
-  background: var(--paper);
-  box-shadow:
-    var(
-      --verso-edges,
-      -1px 0 0 #efe9da,
-      -2px 0 0 #fbf8ef,
-      -3px 1px 0 #e9e2d0,
-      -4px 1px 0 #f7f3e8
-    ),
-    0 1px 2px rgba(30, 15, 5, 0.18);
-}
-html[data-variant="desk"][data-book="agenda"] .book-verso::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  opacity: 0.22;
-  mix-blend-mode: multiply;
-  background-size: 600px 600px;
-  background-image: var(--paper-tooth);
-}
-/* The gutter: pages curving down into the binding, darkest at the join.
-   Over both pages and whatever is written near it, multiplied, as real
-   shade would be. Narrow enough to stay in today's page margin, clear of
-   the text column. */
-html[data-variant="desk"][data-book="agenda"] .book-spine {
-  display: block;
-  position: absolute;
-  z-index: 31;
-  top: 0;
-  bottom: 0;
-  left: -2.25rem;
-  width: 4.5rem;
-  pointer-events: none;
-  mix-blend-mode: multiply;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(90, 60, 30, 0.05) 28%,
-    rgba(60, 38, 16, 0.16) 44%,
-    rgba(35, 22, 10, 0.34) 50%,
-    rgba(60, 38, 16, 0.16) 56%,
-    rgba(90, 60, 30, 0.05) 72%,
-    transparent 100%
-  );
-}
-
-/* The printed date. Type the diary came with, not ink: a crisp sans in a
-   printer's grey, ruled off with a straight hairline — no --stroke-filter
-   here, printing does not wobble. Figtree because it is already loaded
-   for clean; no new download. The contrast between this and the hand
-   below it is most of what says "agenda". */
-html[data-variant="desk"][data-book="agenda"] .book-date {
-  display: block;
-  min-height: 2.6rem;
-  margin: 0 0 var(--sp-6);
-}
-.book-date time,
-.book-through-date {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sp-3);
-  margin: 0;
-  padding-bottom: var(--sp-2);
-  border-bottom: 1px solid rgba(70, 62, 52, 0.4);
-  font-family: var(--font-clean-sans);
-  line-height: 1.2;
-  color: #5f594f;
-}
-.book-date-weekday {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
-.book-date-day {
-  margin-left: auto;
-  font-size: var(--text-md);
-  font-weight: 500;
-}
-
-/* Yesterday's ink through the back of its leaf. The same layout as
-   today's page, mirrored as a whole — the side that was against the
-   spine is still against the spine — and then made to look like ink seen
-   through paper: much fainter, softened because the fibres scatter it,
-   warmer and greyer because the paper filters it, and multiplied so it
-   sits in the sheet rather than on it. Highlighter shows through as a
-   faint yellow, ruled lines and strikes as faint lines. A transform, but
-   on this copy only, never on anything live. */
-.book-through {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  padding: var(--sp-7) clamp(var(--sp-4), 6vw, var(--sp-7));
-  color: #6a5238;
-  opacity: 0.13;
-  filter: blur(0.7px);
-  mix-blend-mode: multiply;
-  transform: scaleX(-1);
-}
-.book-through-date {
-  margin-bottom: var(--sp-6);
-  border-bottom-color: currentColor;
-  color: inherit;
-}
-.book-through-title {
-  width: fit-content;
-  margin: 0 0 var(--sp-7);
-  font-family: var(--font-display);
-  font-size: clamp(2.25rem, 1.6rem + 3vw, 3.25rem);
-  font-weight: 700;
-  line-height: 0.95;
-}
-.book-through-hl {
-  /* Highlighter is thin, water-based ink: it barely makes it through. */
-  background: rgba(255, 230, 0, 0.45);
-  border-radius: 3px 10px 4px 12px / 10px 3px 12px 4px;
-}
-.book-through-rows {
-  margin: 4.25rem 0 0;
-  padding: 0;
-  list-style: none;
-  font-family: var(--font-row);
-  font-size: 1.09rem;
-  line-height: 1.4;
-}
-.book-through-rows li {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(0, 1fr);
-  align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-2) 0 var(--sp-2) 0.5rem;
-  /* The rules are a lighter stroke than the writing, so they come
-     through fainter still. */
-  border-bottom: 2px solid rgba(106, 82, 56, 0.55);
-}
-.book-through-box {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 2px solid currentColor;
-  border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
-}
-.book-through-rows li[data-done] .book-through-text {
-  text-decoration: line-through;
-}
-.book-through-rows li[data-marked] .book-through-text {
-  background: rgba(255, 230, 0, 0.45);
 }
