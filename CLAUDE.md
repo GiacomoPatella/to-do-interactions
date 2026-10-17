@@ -47,7 +47,10 @@ difference is a token block plus `--stroke-filter`:
   does the instrumentation, with Kalam on the title. A second toggle
   (`data-heading`, organic only) swaps the title between Kalam / Playpen /
   Architects; Kalam is the current pick. Caveat was tried and rejected — its
-  letterforms read badly at this size.
+  letterforms read badly at this size. A third toggle (`data-row-font`,
+  organic only) does the same for the row text alone — titles, edit input,
+  composer — offering Shantell plus the three title faces, so it costs no
+  extra font downloads. Instrumentation stays Shantell regardless.
 - **clean** — Figtree, DM Mono, straight edges, `--stroke-filter: none`, one
   indigo accent.
 
@@ -69,7 +72,10 @@ of it as quiet work rather than signature moments:
 
 - the empty state is a dashed hand-drawn frame with a restore link;
 - a completed row mutes and strikes, wipes any highlighter back off in the same
-  move, and sinks to the bottom of the list on the existing reorder FLIP;
+  move, and sinks below the open rows — to the *top* of the done block, so
+  done reads newest-first — on the existing reorder FLIP. Sinking is a
+  setting (the bar's **List** drawer, persisted as `gp-lab-sink-done`); off,
+  completion happens in place, and switching it back on sorts the list;
 - **hide done** folds those rows away — each fades where it stood, on its own
   ghost state, while the status line closes the gap. Not the bin: hiding isn't
   destructive and must not borrow a destructive metaphor. Completing something

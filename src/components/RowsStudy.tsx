@@ -414,6 +414,15 @@ const HEADINGS: { value: Heading; label: string; cssVar: string }[] = [
   { value: "architects", label: "Architects", cssVar: "--font-head-architects" },
 ];
 
+/* The same idea for the row text, organic only as well: clean is tuned
+   for Figtree throughout. Shantell is the hand everything else is set in,
+   and the rest reuse the title faces, which are already loaded. */
+type RowFont = "shantell" | Heading;
+const ROW_FONTS: { value: RowFont; label: string; cssVar: string }[] = [
+  { value: "shantell", label: "Shantell", cssVar: "--font-hand" },
+  ...HEADINGS,
+];
+
 export default function RowsStudy() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -450,7 +459,9 @@ export default function RowsStudy() {
     | null
   >(null);
   const [params, setParams] = useState<Params>(DEFAULTS);
-  const [drawer, setDrawer] = useState<null | "timings" | "keys">(null);
+  const [drawer, setDrawer] = useState<null | "timings" | "list" | "keys">(
+    null,
+  );
   const [staggering, setStaggering] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -460,6 +471,10 @@ export default function RowsStudy() {
      <html> so it also reaches the title, which renders outside this tree. */
   const [variant, setVariant] = useState<Variant>("organic");
   const [heading, setHeading] = useState<Heading>("kalam");
+  const [rowFont, setRowFont] = useState<RowFont>("shantell");
+  /* Whether completing a row sinks it below the open ones. On by
+     default; off, a completed row stays exactly where it was. */
+  const [sinkDone, setSinkDone] = useState(true);
   /* Completed rows sink to the bottom (see toggleDone) and can be hidden
      entirely once there. Both are quiet utility behaviour, not signature
      moments, so neither gets a bespoke transition beyond what already
@@ -478,8 +493,15 @@ export default function RowsStudy() {
     if (stored === "clean") setVariant("clean");
     const h = localStorage.getItem("gp-lab-heading");
     if (h === "playpen" || h === "architects") setHeading(h);
+    const rf = localStorage.getItem("gp-lab-row-font");
+    if (rf === "kalam" || rf === "playpen" || rf === "architects") {
+      setRowFont(rf);
+    }
     const hd = localStorage.getItem("gp-lab-hide-done");
     if (hd === "true") setHideDone(true);
+    if (localStorage.getItem("gp-lab-sink-done") === "false") {
+      setSinkDone(false);
+    }
   }, []);
   useEffect(() => {
     document.documentElement.dataset.variant = variant;
@@ -490,8 +512,15 @@ export default function RowsStudy() {
     localStorage.setItem("gp-lab-heading", heading);
   }, [heading]);
   useEffect(() => {
+    document.documentElement.dataset.rowFont = rowFont;
+    localStorage.setItem("gp-lab-row-font", rowFont);
+  }, [rowFont]);
+  useEffect(() => {
     localStorage.setItem("gp-lab-hide-done", String(hideDone));
   }, [hideDone]);
+  useEffect(() => {
+    localStorage.setItem("gp-lab-sink-done", String(sinkDone));
+  }, [sinkDone]);
 
   const studyRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
@@ -946,11 +975,15 @@ export default function RowsStudy() {
     [snap, announce],
   );
 
-  /* Completing a row sinks it to the bottom of the list, below every row
-     still open; reopening it surfaces it again just above the done block.
-     Neither hunts for "its" original slot — that would need remembering a
-     position nothing else in this app tracks — so a reopened row rejoins
-     at the top of the open group rather than wherever it started. */
+  /* Completing a row sinks it below every row still open, to the TOP of
+     the done block: the newest finish sits nearest the open work, so the
+     done block reads as a log, most recent first, and the row travels
+     the shortest distance it can. Reopening surfaces it just above the
+     done block. Both directions land on the same boundary, so they are
+     exact inverses. Neither hunts for "its" original slot — that would
+     need remembering a position nothing else in this app tracks.
+
+     With sinkDone off, completion is in place: nothing moves at all. */
   const toggleDone = useCallback(
     (id: string) => {
       const row = rows.find((r) => r.id === id);
@@ -961,9 +994,9 @@ export default function RowsStudy() {
         const updated = r.map((x) =>
           x.id === id ? { ...x, done: nowDone } : x,
         );
+        if (!sinkDone) return updated;
         const me = updated.find((x) => x.id === id) as Row;
         const rest = updated.filter((x) => x.id !== id);
-        if (nowDone) return [...rest, me];
         const at = rest.findIndex((x) => x.done);
         const insertAt = at === -1 ? rest.length : at;
         return [...rest.slice(0, insertAt), me, ...rest.slice(insertAt)];
@@ -980,8 +1013,24 @@ export default function RowsStudy() {
       }
       announce(nowDone ? "row completed" : "row reopened");
     },
-    [rows, snap, announce, hideDone],
+    [rows, snap, announce, hideDone, sinkDone],
   );
+
+  /* Turning sinking back on applies it to the list as it stands: the
+     done rows that stayed put glide down on the ordinary reorder FLIP,
+     keeping their relative order. Turning it off moves nothing — it only
+     changes what the next completion does. */
+  const toggleSinkDone = useCallback(() => {
+    const next = !sinkDone;
+    setSinkDone(next);
+    if (next) {
+      snap("reorder");
+      setRows((r) => [...r.filter((x) => !x.done), ...r.filter((x) => x.done)]);
+    }
+    announce(
+      next ? "completed rows sink to the bottom" : "completed rows stay in place",
+    );
+  }, [sinkDone, snap, announce]);
 
   /* Emphasis. No snap() needed: nothing changes size or position, the
      highlighter just wipes across in place. */
@@ -1534,6 +1583,28 @@ export default function RowsStudy() {
         </div>
       )}
 
+      {variant === "organic" && (
+        <div
+          className="variant-toggle heading-toggle row-font-toggle"
+          role="group"
+          aria-label="list font"
+        >
+          {ROW_FONTS.map(({ value, label, cssVar }) => (
+            <button
+              key={value}
+              type="button"
+              className="variant-opt"
+              data-active={rowFont === value ? "true" : undefined}
+              aria-pressed={rowFont === value}
+              style={{ fontFamily: `var(${cssVar})` }}
+              onClick={() => setRowFont(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form
         className="rows-add"
         onSubmit={(e) => {
@@ -1911,6 +1982,21 @@ export default function RowsStudy() {
           </FadeIn>
         )}
 
+        {/* Behaviour, not timing, so it gets its own drawer rather than
+            a slot among the sliders. */}
+        {drawer === "list" && (
+          <FadeIn className="bar-drawer">
+            <label className="ctrl-check">
+              <input
+                type="checkbox"
+                checked={sinkDone}
+                onChange={toggleSinkDone}
+              />
+              <span>Move completed rows to the bottom</span>
+            </label>
+          </FadeIn>
+        )}
+
         {drawer === "keys" && (
           <FadeIn className="bar-drawer">
             <dl className="keys">
@@ -1954,6 +2040,14 @@ export default function RowsStudy() {
               onClick={() => setDrawer((d) => (d === "timings" ? null : "timings"))}
             >
               Timings
+            </button>
+            <button
+              type="button"
+              className="bar-tab"
+              aria-expanded={drawer === "list"}
+              onClick={() => setDrawer((d) => (d === "list" ? null : "list"))}
+            >
+              List
             </button>
             <button
               type="button"

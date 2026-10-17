@@ -97,6 +97,10 @@
   --font-display: var(--font-head-kalam), "Bradley Hand", cursive;
   --font-sans: var(--font-hand);
   --font-mono: var(--font-hand);
+  /* The row text alone — titles, the edit input, the composer — so
+     data-row-font can swap the face you read without touching the
+     instrumentation. Defaults to the hand everything else is set in. */
+  --font-row: var(--font-hand);
 
   /* Every straight edge is drawn through this. The clean skin sets it to
      none; here it displaces borders and rules into a felt-tip wobble. */
@@ -119,6 +123,19 @@
 }
 [data-heading="architects"] {
   --font-display: var(--font-head-architects), "Bradley Hand", cursive;
+}
+/* Row-font switch, same mechanism and same scoping trick: the clean
+   skin resets --font-row later in the file and wins. The candidates are
+   the faces already loaded for the title, so the switch costs no extra
+   downloads. */
+[data-row-font="kalam"] {
+  --font-row: var(--font-head-kalam), "Bradley Hand", cursive;
+}
+[data-row-font="playpen"] {
+  --font-row: var(--font-head-playpen), "Bradley Hand", cursive;
+}
+[data-row-font="architects"] {
+  --font-row: var(--font-head-architects), "Bradley Hand", cursive;
 }
 
 /* A handwriting face reads smaller than a clean sans at the same pixel
@@ -430,6 +447,15 @@ h1 {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--sp-1);
+  cursor: pointer;
+}
+/* A link at rest gets the link cursor, input included (an input brings
+   its own I-beam). The I-beam only belongs once there is something to
+   type into, which is the same moment the ruled line appears. */
+.rows-add-composer:not(:focus-within) .rows-input {
+  cursor: pointer;
+}
+.rows-add-composer:focus-within {
   cursor: text;
 }
 /* Sized and centred like a row's check button, so the drawn box below
@@ -537,6 +563,15 @@ h1 {
   text-decoration: underline;
   text-decoration-thickness: 1.5px;
   text-underline-offset: 0.2em;
+}
+/* The link's own hover, alongside the box's: the underline thickens, the
+   way a second pass of the pen would. Not transitioned — placeholder
+   decoration doesn't interpolate reliably, and a link that answers on
+   the frame you reach it is the expected behaviour anyway. */
+@media (hover: hover) and (pointer: fine) {
+  .rows-add-composer:not(:focus-within):hover .rows-input::placeholder {
+    text-decoration-thickness: 2.5px;
+  }
 }
 .rows-input:focus {
   outline: none;
@@ -747,7 +782,14 @@ h1 {
    first third of the duration, so at 130ms the row was already
    effectively gone before the transition had finished — the tail end was
    imperceptible, which read as a snap rather than a fade. --ease-land
-   spreads the change evenly across the full duration instead. */
+   spreads the change evenly across the full duration instead.
+
+   With "Move completed rows to the bottom" switched off, done rows can
+   sit mid-list, and then their neighbours DO glide up through the
+   ghost's slot. That holds up for the same reason the timing above
+   does: --b-hide and --b-settle are both 170ms, so the row sliding over
+   the ghost covers it on the same curve it is fading on. Retune one
+   without the other and this is where it shows. */
 .rows-row[data-state="hiding"] {
   position: absolute;
   z-index: 0;
@@ -1558,6 +1600,25 @@ h1 {
 .ctrl select {
   grid-column: 1 / -1;
 }
+/* A behaviour switch in the List drawer. The whole label is the target,
+   and min-height keeps it at the 40px hit-area floor. */
+.ctrl-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 2.5rem;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  cursor: pointer;
+}
+.ctrl-check input {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  accent-color: var(--marker);
+  cursor: pointer;
+}
 
 input[type="range"] {
   width: 100%;
@@ -1743,6 +1804,7 @@ input[type="range"] {
   --font-sans: var(--font-clean-sans);
   --font-mono: var(--font-clean-mono);
   --font-display: var(--font-clean-sans);
+  --font-row: var(--font-clean-sans);
 
   /* The whole hand-drawn apparatus is one property. Off, everything is
      crisp. */
@@ -1859,4 +1921,17 @@ input[type="range"] {
 .heading-toggle .variant-opt {
   font-size: var(--text-sm);
   line-height: 1.1;
+}
+
+/* The row-font switch: a third pill under the heading one, same
+   preview-in-its-own-face idea. The faces themselves are applied last in
+   the file, after every `font: inherit` on these elements, so the
+   variable actually lands. */
+.row-font-toggle {
+  top: calc(var(--sp-4) + 5.2rem);
+}
+.rows-title,
+.rows-edit,
+.rows-input {
+  font-family: var(--font-row);
 }
