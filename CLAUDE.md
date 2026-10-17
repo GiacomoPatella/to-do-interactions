@@ -154,29 +154,95 @@ Micro-interaction timings (`--b-press`, `--b-hover`, `--b-pop`, `--b-pop-lively`
 `--b-stagger`) are intentionally **not** in the drawer. Exposing a 320ms number for
 something that reads as a 110ms pop would be the same category of lie.
 
-### Delete: into the bin, and the lid does the acting
+### ~~Delete: into the bin, and the lid does the acting~~ · SUPERSEDED 2026-08-20
 
-The original brief said *"crumble up and throw in a bin."* What shipped converges
-the row on its own bin in 150ms. The reasoning, because it generalises:
+What ships now is a plain opacity fade, in place — the row fades where it
+stands, still occupying its slot in the list, and only actually disappears
+(triggering its neighbours to close the gap) once the fade is done. Four
+versions across 2026-08-20 and -21, each retired for a different, non-obvious
+reason — kept in full because each one looked like a small tweak and turned
+out not to be:
 
-- **The flourish goes on the small element, not the big one.** The instinct is to
-  make the *row* perform. That is exactly what dies on the tenth repeat — a big
-  object travelling a long way that you cannot help watching. The lid is 10px and
-  moves for 75ms, so it still reads at the fiftieth delete.
-- **No crumple.** You cannot crumple with transform and opacity; a faked one reads
-  as a glitch, and it needs ~400ms to be legible at all, which is the duration that
-  stops being charming.
-- **Semantics first.** `⌘z` exists. A metaphor that says *destroyed* — crumpling,
-  tearing, burning — contradicts the undo sitting in the status line. A bin is the
-  one delete metaphor that is honestly recoverable.
-- `transform-origin` lands on the delete control, so one `scale(0.12)` converges
-  everything on the bin for free — no coordinates, and the target travels with the
-  ghost because the ghost renders its own bin.
-- The easing is **in-out**, and this was measured, not guessed. At the 75ms mark
-  where the lid shuts: `ease-in` leaves the row at 87% scale (lid closes on
-  something that hasn't moved), `ease-out` puts it at 15% (gone before the lid
-  starts), `in-out` lands it at 56% — visibly half-swallowed exactly as the lid
-  comes down.
+1. **Converge onto the bin** (scale + rotate, timed so the lid closed on a
+   visibly half-swallowed row — the original design, see git history for the
+   measured easing rationale). Retired: reading that convergence required an
+   ABOVE-live-rows ghost, so a shrinking, rotating row visibly crossed the
+   neighbours compacting into its old space. Busy, not satisfying.
+2. **A plain fade, as a decoupled ghost, under the live rows** (mirroring how
+   "hiding" still works). Retired: the ghost's duration got bumped twice
+   (220ms, then 400ms) chasing a "still reads as instant" complaint that
+   duration couldn't fix — a deleted row can be anywhere in the list, so its
+   neighbours FLIP *through* its vacated slot to close the gap, and at
+   z-index 0 those opaque neighbours covered the still-fading ghost within
+   one settle glide (~170ms), regardless of `--b-leave`. ("Hiding" never
+   hits this because hidden rows are always at the bottom — nothing glides
+   through their slot.)
+3. **The same ghost, moved to z-index 2, above the live rows.** This made the
+   fade visible for its full duration (verified: `elapsedTime: 1` on a clean
+   `transitionend`) but didn't fix the actual complaint once it was stated
+   precisely: "the row disappears first, then the content fades" — backwards
+   from "content fades, then the row disappears." The ghost was always a
+   decoupled overlay; `rows` loses the row, and the neighbours' FLIP fires,
+   on the same tick as the click regardless of what the ghost sitting on top
+   of that already-closed gap is doing. Z-index only controlled which layer
+   was drawn on top of the other — it never controlled *order*.
+4. **Current: no ghost at all.** The row fades in place — still inside
+   `rows`, still occupying its grid slot (`deletingIds` in `RowsStudy.tsx`).
+   Nothing else in the list can move, because nothing has left `rows` yet.
+   Only once the fade's own `transitionend` fires (or a safety-net timer, so
+   a backgrounded tab can't strand a row mid-fade forever) does
+   `finalizeDelete` actually remove it — which is the only thing that
+   triggers the neighbours' FLIP. The ordering is now structural, not
+   timing-coincidental: fade first, always, then the row disappears.
+
+Whatever eventually replaces this plain fade — Giacomo wants a genuinely
+creative destruction animation eventually, smoke/disintegration/particles,
+filed as a future delight item in `INBOX.md` — should still honor:
+
+- **The flourish goes on the small element, not the big one.** The instinct is
+  to make the *row* perform. That's exactly what died on the tenth repeat in
+  version 1 above — a big object travelling a long way that you cannot help
+  watching, and at list scale, across its neighbours too.
+- **No crumple.** You cannot crumple with transform and opacity; a faked one
+  reads as a glitch, and needs ~400ms to be legible at all — the duration
+  that stops being charming.
+- **Semantics first.** `⌘z` exists. A metaphor that says *destroyed* —
+  crumpling, tearing, burning — contradicts the undo sitting in the status
+  line. Whatever replaces the fade should stay honestly recoverable in
+  spirit, the way the original bin was.
+- **The ordering has to stay structural, not timing-coincidental.** Version 3
+  above is the specific trap to avoid re-falling into: getting a longer
+  duration to *look* right by outrunning a decoupled removal is not the same
+  as the removal actually waiting on it.
+
+The lid itself is untouched — it still opens on hover as a live-row affordance
+(`.rows-del:hover .rows-del-lid` in `globals.css`); its old leaving-state
+slam-shut, choreographed against the row's shrink in version 1, is long gone
+along with that shrink.
+
+Current state: `--b-leave: 400ms`, `--ease-in` (`cubic-bezier(0.5, 0, 0.9,
+0.4)`), fading in place via `[data-deleting]`/`[data-out]` in `globals.css`.
+1000ms was the value while the bug below was being tracked down — once the
+bug was fixed and the fade could actually be seen playing correctly, 400ms
+turned out to be the real desired duration.
+
+**One real bug on top of the four versions above, caught from Giacomo's own
+description ("no fade, it just loses hover and disappears").** The in-place
+row's `onTransitionEnd` had no `e.target` check, so it fired on *any*
+`opacity` transitionend bubbling up from inside it. The instant
+`[data-deleting]` sets `pointer-events: none`, the row stops matching
+`:hover`, and every hoverable child (the grip especially) starts its own
+`--d-hover` (~90ms) cleanup transition and fires its own bubbled "opacity"
+event — which finalized the row at ~90ms, roughly 9% into the curve,
+visually indistinguishable from never fading. Fixed with
+`e.target === e.currentTarget` in the guard. The old ghost-based delete
+never hit this: `GhostFace` is static, non-interactive spans, born
+`pointer-events: none`, never hovered — nothing to clean up. The new
+in-place delete reuses the *real* row markup (grip, mark, delete button),
+which is what made this reachable. Verified live with a continuous poll
+after establishing real hover state first: opacity tracked the
+deterministic curve smoothly the whole second (1.0 → 0.95 → 0.77 → 0.35 →
+0, at t=200/400/700/1000ms), row present throughout, finalized only after.
 
 ### ~~The readout must stay honest~~ · SUPERSEDED 2026-07-20
 

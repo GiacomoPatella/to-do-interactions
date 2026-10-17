@@ -276,10 +276,13 @@ h1 {
   /* Roughened like every other organic stroke, so the sun reads as drawn
      rather than geometric (it is hidden in the clean skin). */
   filter: var(--stroke-filter);
-  /* A slow, continuous ease-in-out sway — it drifts and eases at each turn
+  /* A continuous ease-in-out sway — it drifts and eases at each turn
      rather than snapping. Decorative, so it runs on its own clock, not the
-     app's time scale. */
-  animation: doodle-sway 6s ease-in-out infinite;
+     app's time scale. 3s, not the original 6s: Giacomo flagged the slower
+     cycle as sluggish 2026-08-20. The icon itself is still an open
+     question (he wants something other than the sun) — see INBOX.md;
+     this only fixes the speed complaint, not the icon. */
+  animation: doodle-sway 3s ease-in-out infinite;
 }
 @keyframes doodle-sway {
   0%,
@@ -318,11 +321,15 @@ h1 {
      its pace with the other quiet FLIP rather than being visibly the
      quicker of the two. */
   --b-enter: 170ms;
-  /* Nudged up from 130: the shrink into the bin has further to travel
-     than the old flick did, and below about 150 the lid and the row
-     resolve on top of each other instead of in sequence. Still inside
-     the burst-delete budget. */
-  --b-leave: 150ms;
+  /* 150 → 220 → 400 → 1000 → 400 → 300 across six follow-ups, 2026-08-20
+     and -21 — the first four chasing an "instantaneous" complaint that
+     turned out to be a real bug (a bubbled child transitionend
+     finalizing the row at ~90ms regardless of this value; see the
+     onTransitionEnd guard on the row and CLAUDE.md's account), not a
+     duration problem. With that fixed, the fade actually plays for its
+     full configured length. --ease-in below (starts slow, accelerates
+     through the exit) rather than an evenly-paced curve. */
+  --b-leave: 400ms;
   --b-settle: 170ms;
   --b-reorder: 130ms;
   --b-draw: 210ms;
@@ -682,89 +689,54 @@ h1 {
   transition-delay: calc(var(--row-i, 0) * var(--d-stagger));
 }
 
-/* Leaving rows go out of flow at once, pinned to their last box, so
-   their neighbours close the gap by FLIP while the ghost plays where it
-   stood. z-index 0 puts it UNDER the live rows (which are z-index 1 and
-   opaque), so the closing list wipes over it instead of blending with
-   it. */
-.rows-row[data-state="leaving"] {
-  position: absolute;
-  /* ABOVE the live rows, which reverses the previous arrangement and
-     needs saying. When the exit was a flick off the left edge, sitting
-     at z-index 0 was right: the closing list wiped over the ghost
-     instead of blending with it. This exit converges on a point inside
-     the ghost's own row, so being wiped over would hide the entire
-     thing. It is on top now, and it earns that by being gone fast. */
-  z-index: 2;
-  left: 0;
-  right: 0;
+/* Deleting fades the row IN PLACE — no ghost, no position:absolute, no
+   z-index games. It stays exactly where it is in the list, still taking
+   up its grid row, until its own fade finishes; only then does
+   RowsStudy.tsx actually remove it from `rows`, and the ordinary FLIP
+   glide moves the rest of the list up to close the gap.
+
+   Third version of this exit, each correction from direct feedback
+   across 2026-08-20 and -21 — worth keeping the trail, because each
+   failed for a different, non-obvious reason:
+
+   1. Converge onto the bin (scale + rotate, timed so the lid closed on a
+      visibly half-swallowed row — see git history). Retired: reading
+      that convergence required an ABOVE-live-rows ghost, so a shrinking,
+      rotating row visibly crossed the neighbours compacting into its old
+      space. Busy, not satisfying.
+   2. A plain fade, as a decoupled ghost pinned over the row's last
+      position — same mechanism "hiding" still uses below. Retired: a
+      deleted row can be anywhere in the list, so its neighbours FLIP
+      THROUGH its vacated slot to close the gap — and removing the row
+      from `rows` immediately (the same tick as the click) meant that
+      glide fired well before a several-hundred-ms fade could be seen.
+      It read as "the row vanishes, then a ghost lingers" — backwards
+      from the requested "content fades, then the row disappears".
+      Moving the ghost to z-index 2 (above the live rows) made the fade
+      visible for its full duration, but didn't fix the ordering — the
+      gap still closed on the very first frame, before the fade had even
+      started.
+   3. This version: no ghost, no early removal. The row leaving `rows` —
+      which is the only thing that triggers the neighbours' FLIP — is
+      deferred until after the fade is already done. Nothing can race
+      ahead of it, because nothing else moves until it has already
+      finished.
+
+   --ease-in, not --ease-land like hiding: starts slow, accelerates
+   through the exit, on Giacomo's direct spec — delete reads as more
+   final than hide, so it earns a curve of its own. */
+.rows-row[data-deleting] {
   pointer-events: none;
-  background: none;
-  /* The bin is the destination, so the scale has to converge on it
-     rather than on the row's centre. This lands the origin on the
-     delete control: the row's right padding, plus half that control's
-     width. Everything then falls into the bin for free — no measuring,
-     no coordinates, and the target travels with the ghost. */
-  transform-origin: calc(100% - var(--sp-1) - 1.125rem) 50%;
-  /* Opacity now trails the movement rather than leading it. Fading
-     early was right when the row was leaving the page; here you need to
-     still see it when it arrives at the bin, or the metaphor plays to
-     an empty stage.
-
-     in-out, NOT ease-in, and the difference is not subtle. Measured at
-     the 75ms mark where the lid shuts: ease-in leaves the row at 87%
-     scale, so the lid closes on something that has barely moved and the
-     row then collapses separately. ease-out puts it at 15% and 4%
-     opacity — gone before the lid even starts. in-out lands it at 56%,
-     visibly half-swallowed at exactly the moment the lid comes down,
-     which is the only version where the two read as one action. */
-  transition:
-    opacity calc(var(--d-leave) * 0.9) var(--ease-in-out),
-    transform var(--d-leave) var(--ease-in-out);
+  transition: opacity var(--d-leave) var(--ease-in);
 }
-.rows-row[data-state="leaving"]::after {
+.rows-row[data-deleting][data-out] {
   opacity: 0;
-}
-/* The bin has to be visible on the ghost or there is nothing to fall
-   into: the control is hover-revealed on live rows, and a ghost never
-   matches :hover. */
-.rows-row[data-state="leaving"] .rows-del {
-  opacity: 1;
-}
-/* Delete: the row is drawn into its own bin. Accelerating in, with a
-   few degrees of rotation so it reads as a sheet of paper being pulled
-   rather than a box being scaled. One transition, fully interruptible:
-   a burst of deletes is a burst of independent ghosts and nothing
-   queues. */
-.rows-row[data-state="leaving"][data-out] {
-  opacity: 0;
-  transform: scale(0.12) rotate(-5deg);
-}
-
-/* The lid does the acting.
-
-   The instinct is to make the ROW perform — crumple it, arc it across
-   the screen. That is what dies on the tenth repeat, because it is a
-   big object travelling a long way and you cannot help watching it.
-   The lid is 10px and moves for 75ms, so it stays satisfying at the
-   fiftieth delete.
-
-   It starts open because that is the state you were just looking at —
-   you clicked the bin, so its lid was up — and slams shut while the row
-   is still shrinking. That ordering is the whole gag: the lid closes ON
-   the row, rather than the row vanishing and the lid closing after. */
-.rows-row[data-state="leaving"] .rows-del-lid {
-  transform: translate(-1.1px, -1.6px) rotate(-19deg);
-  transition: transform calc(var(--d-leave) * 0.5) var(--ease-in);
-}
-.rows-row[data-state="leaving"][data-out] .rows-del-lid {
-  transform: none;
 }
 
 /* Hiding: the "Hide done" toggle folding a row out of view, not deleting
    it — so no bin, no convergence, just the row fading where it stood.
-   z-index 0 keeps it under the live, opaque rows (same reasoning as the
-   delete ghost) even though in practice nothing here overlaps it: rows
+   z-index 0 keeps it under the live, opaque rows even though in practice
+   nothing here overlaps it: rows
    sunk to the bottom don't move when their neighbours below are hidden,
    only the status line below the list glides up over the ordinary FLIP
    effect to close the gap, on --d-settle — --b-hide defaults to the same
@@ -1007,14 +979,13 @@ h1 {
   text-align: left;
   overflow-wrap: anywhere;
   cursor: text;
-  transition:
-    color var(--d-hover) ease,
-    transform var(--d-hover) var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .rows-row:hover .rows-title {
-    transform: translateX(2px);
-  }
+  /* No hover shift on the title any more: it was translateX(2px), and
+     removed 2026-08-21 because snapping it back off is exactly what
+     fires the instant a delete starts (pointer-events:none drops the
+     row out of :hover) — a second, unrelated motion competing with the
+     fade for attention right at the moment that's supposed to read as
+     "fire immediately". One thing happening, not two. */
+  transition: color var(--d-hover) ease;
 }
 .rows-row[data-state="done"] .rows-title,
 .rows-row[data-done="true"] .rows-title {
@@ -1681,10 +1652,6 @@ input[type="range"] {
   .rows-study .rows-row[data-state="entering"] {
     transform: none;
   }
-  /* Delete collapses to a plain crossfade: no flick, no rotation. */
-  .rows-study .rows-row[data-state="leaving"][data-out] {
-    transform: none;
-  }
   .rows-study .rows-row[data-enter="draw"]::after,
   .rows-study .rows-row[data-enter="draw"] > * {
     animation: none;
@@ -1698,8 +1665,7 @@ input[type="range"] {
   .rows-study .rows-del:active svg,
   .rows-study .rows-mark:hover svg,
   .rows-study .rows-mark:active svg,
-  .rows-study .rows-grip:hover,
-  .rows-study .rows-row:hover .rows-title {
+  .rows-study .rows-grip:hover {
     transform: none;
   }
   /* The lid still opens: it is a state change on an icon, not motion

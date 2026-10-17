@@ -46,13 +46,11 @@ import {
    app infers. Deliberately separate from `done` — see the note in
    globals.css about why completion must never highlight anything. */
 type Row = { id: string; text: string; done: boolean; marked: boolean };
-/* A leaving row, pinned where it stood while its neighbours close the
-   gap. The flick and the reduced-motion crossfade are the same
-   transition with the transform dropped by the stylesheet. */
-/* kind distinguishes a deleted row (into the bin, see the "leaving"
-   data-state) from a hidden one (a plain quick fade, see "hiding") — two
-   different reasons a row leaves the flow, so two different exits. */
-type Ghost = { row: Row; top: number; out: boolean; kind: "delete" | "hide" };
+/* A row hidden by the "Hide done" toggle, pinned where it stood while
+   its neighbours close the gap — see "hiding" in globals.css. Delete no
+   longer uses ghosts: see deletingIds below for why (it fades in place,
+   in the live list, instead). */
+type Ghost = { row: Row; top: number; out: boolean };
 
 type DragState = {
   id: string;
@@ -128,7 +126,7 @@ const DEFAULTS: Params = {
   draw: 210, // signature: the rule sweeping in. Left long.
   complete: 120, // the most repeated action in the app. Crisp.
   mark: 140,
-  leave: 150, // the shrink into the bin; see --b-leave in globals.css.
+  leave: 400, // the delete fade, ease-in; see --b-leave in globals.css.
   reorder: 130, // fires repeatedly mid-drag, has to keep up with the pointer.
   settle: 170,
   enter: 170, // matches settle: an arriving row is a quiet moment, not a signature one.
@@ -425,6 +423,17 @@ export default function RowsStudy() {
      reseed keep the plain enter, because drawing a fresh line is a claim
      about newness and a restored row is not new. */
   const [drawing, setDrawing] = useState<ReadonlySet<string>>(new Set());
+  /* A row pending delete: still in `rows`, still occupying its slot in
+     the list, just fading — see deleteRow below for why this has to stay
+     in place instead of leaving immediately like every other exit in
+     this file. deletingOut two-frame-flips the same way entering does,
+     so the fade has a painted start to leave from. */
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
+  const [deletingOut, setDeletingOut] = useState<ReadonlySet<string>>(
+    new Set(),
+  );
   const [editing, setEditing] = useState<
     { id: string; draft: string; caret?: number } | null
   >(null);
@@ -491,6 +500,7 @@ export default function RowsStudy() {
   const drawTimers = useRef(new Map<string, number>());
   const staggerTimer = useRef(0);
   const ghostTimers = useRef(new Map<string, number>());
+  const deleteTimers = useRef(new Map<string, number>());
   const justCompletedTimers = useRef(new Map<string, number>());
   const prevTops = useRef<Map<string, number> | null>(null);
   const mutationKind = useRef<"settle" | "reorder">("settle");
@@ -748,6 +758,25 @@ export default function RowsStudy() {
     setGhosts((gs) => gs.filter((g) => g.row.id !== id));
   }, []);
 
+  /* The actual removal, deferred until the in-place fade is done — see
+     deletingIds above. Reads the current `rows` through the updater
+     function, so it stays correct even if other rows changed mid-fade. */
+  const finalizeDelete = useCallback((id: string) => {
+    setDeletingIds((s) => {
+      if (!s.has(id)) return s; // already cancelled by undo
+      const next = new Set(s);
+      next.delete(id);
+      return next;
+    });
+    setDeletingOut((s) => {
+      if (!s.has(id)) return s;
+      const next = new Set(s);
+      next.delete(id);
+      return next;
+    });
+    setRows((r) => r.filter((x) => x.id !== id));
+  }, []);
+
   const endDraw = useCallback((id: string) => {
     setDrawing((s) => {
       if (!s.has(id)) return s;
@@ -789,10 +818,12 @@ export default function RowsStudy() {
     const p = paramsRef.current;
     ghosts.forEach((g) => {
       if (ghostTimers.current.has(g.row.id)) return;
-      const base = g.kind === "hide" ? p.hide : p.leave;
       ghostTimers.current.set(
         g.row.id,
-        window.setTimeout(() => retireGhost(g.row.id), base * p.timeScale + 500),
+        window.setTimeout(
+          () => retireGhost(g.row.id),
+          p.hide * p.timeScale + 500,
+        ),
       );
     });
     for (const [id, timer] of ghostTimers.current) {
@@ -802,6 +833,44 @@ export default function RowsStudy() {
       }
     }
   }, [ghosts, retireGhost]);
+
+  /* ---- deleting rows: the same two-frame flip and event-driven-plus-
+     safety-net pattern as ghosts above, just aimed at deletingOut/
+     finalizeDelete instead of a ghost's out/retireGhost ---- */
+  useLayoutEffect(() => {
+    const pending = [...deletingIds].filter((id) => !deletingOut.has(id));
+    if (pending.length === 0) return;
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() =>
+        setDeletingOut((s) => new Set([...s, ...pending])),
+      );
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [deletingIds, deletingOut]);
+
+  useEffect(() => {
+    const p = paramsRef.current;
+    deletingIds.forEach((id) => {
+      if (deleteTimers.current.has(id)) return;
+      deleteTimers.current.set(
+        id,
+        window.setTimeout(
+          () => finalizeDelete(id),
+          p.leave * p.timeScale + 500,
+        ),
+      );
+    });
+    for (const [id, timer] of deleteTimers.current) {
+      if (!deletingIds.has(id)) {
+        clearTimeout(timer);
+        deleteTimers.current.delete(id);
+      }
+    }
+  }, [deletingIds, finalizeDelete]);
 
   /* ---- draw lifecycle: ended by the rule's animationend, with the
      same kind of safety net ---- */
@@ -929,22 +998,27 @@ export default function RowsStudy() {
     [rows, announce],
   );
 
+  /* Deleting fades the row IN PLACE, still in `rows`, still occupying its
+     grid slot — it is only actually removed once its own fade finishes
+     (see finalizeDelete above). Every other exit in this file removes
+     the row immediately and animates a decoupled ghost over the top; that
+     approach was tried here first and broke the requested "content fades,
+     then the row disappears" ordering, because the neighbours' FLIP glide
+     to close the gap fires the instant the row leaves `rows` — which used
+     to be the same tick as the click, well before a several-hundred-ms
+     fade had a chance to be seen. Deferring the actual removal instead of
+     the fade start point means nothing else in the list moves until this
+     row is already gone. */
   const deleteRow = useCallback(
     (id: string) => {
+      if (deletingIds.has(id)) return;
       const index = rows.findIndex((r) => r.id === id);
       if (index === -1) return;
       const row = rows[index];
       const el = rowEls.current.get(id);
-      const list = listRef.current;
       const hadFocus = !!el && el.contains(document.activeElement);
       snap();
-      if (el && list) {
-        // Pin the ghost at the row's visual position (mid-glide included).
-        const rect = el.getBoundingClientRect();
-        const top = rect.top - list.getBoundingClientRect().top;
-        setGhosts((gs) => [...gs, { row, top, out: false, kind: "delete" }]);
-      }
-      setRows((r) => r.filter((x) => x.id !== id));
+      setDeletingIds((s) => new Set(s).add(id));
       setUndoable({ kind: "delete", row, index });
       announce("row deleted, press command z to undo");
       // Focus must not die with the row.
@@ -957,7 +1031,7 @@ export default function RowsStudy() {
         });
       }
     },
-    [rows, snap, announce],
+    [rows, deletingIds, snap, announce],
   );
 
   const undo = useCallback(() => {
@@ -965,14 +1039,26 @@ export default function RowsStudy() {
     snap();
     if (undoable.kind === "delete") {
       const { row, index } = undoable;
-      // If the ghost of this row is still leaving, retire it now: two
-      // copies of the same row on screen would be a lie.
-      setGhosts((gs) => gs.filter((g) => g.row.id !== row.id));
-      setRows((r) => {
-        const at = Math.min(index, r.length);
-        return [...r.slice(0, at), row, ...r.slice(at)];
-      });
-      setEntering((s) => new Set(s).add(row.id));
+      if (deletingIds.has(row.id)) {
+        // Still fading in place — it was never actually removed from
+        // `rows`, so undoing it is just cancelling the pending removal.
+        setDeletingIds((s) => {
+          const next = new Set(s);
+          next.delete(row.id);
+          return next;
+        });
+        setDeletingOut((s) => {
+          const next = new Set(s);
+          next.delete(row.id);
+          return next;
+        });
+      } else {
+        setRows((r) => {
+          const at = Math.min(index, r.length);
+          return [...r.slice(0, at), row, ...r.slice(at)];
+        });
+        setEntering((s) => new Set(s).add(row.id));
+      }
       announce("row restored");
     } else {
       const { id, text } = undoable;
@@ -980,7 +1066,7 @@ export default function RowsStudy() {
       announce("edit undone");
     }
     setUndoable(null);
-  }, [undoable, snap, announce]);
+  }, [undoable, deletingIds, snap, announce]);
 
   /* ---- hide/reveal done rows ----
      A row hidden by the toggle is not deleted — it should read as an
@@ -1008,7 +1094,6 @@ export default function RowsStudy() {
             row,
             top: rect.top - listRect.top,
             out: false,
-            kind: "hide",
           });
         }
       }
@@ -1504,6 +1589,7 @@ export default function RowsStudy() {
                   ? "done"
                   : "idle";
             const isEditing = editing?.id === row.id;
+            const isDeleting = deletingIds.has(row.id);
             return (
               <li
                 key={row.id}
@@ -1519,12 +1605,20 @@ export default function RowsStudy() {
                 data-marked={row.marked ? "true" : undefined}
                 data-dragging={draggingId === row.id ? "true" : undefined}
                 data-stagger={staggering ? "true" : undefined}
+                /* Separate from data-state on purpose: a done row being
+                   deleted should still read as done (strikethrough, muted)
+                   while it fades, not switch to a different content style
+                   partway through. See globals.css on [data-deleting] for
+                   the fade itself. */
+                data-deleting={isDeleting ? "true" : undefined}
+                data-out={deletingOut.has(row.id) ? "true" : undefined}
                 /* Read by the stylesheet as the stagger multiplier. It is
                    set on every row, but only consumed while data-stagger
                    is present, so a delay never leaks into a FLIP glide or
                    a hover. */
                 style={{ "--row-i": i } as React.CSSProperties}
-                tabIndex={row.id === rovingId ? 0 : -1}
+                tabIndex={isDeleting ? -1 : row.id === rovingId ? 0 : -1}
+                aria-hidden={isDeleting ? true : undefined}
                 aria-label={`${row.text}${row.marked ? ", highlighted" : ""}${
                   row.done ? ", done" : ""
                 }`}
@@ -1534,6 +1628,29 @@ export default function RowsStudy() {
                   // animate too and bubble through here, so the name
                   // check matters.
                   if (e.animationName === "rows-rule-draw") endDraw(row.id);
+                }}
+                onTransitionEnd={(e) => {
+                  /* e.target check matters here specifically: this row
+                     still has real hoverable children (grip, mark,
+                     delete), unlike the "hiding" ghost below, which is
+                     born pointer-events:none and never hovered in the
+                     first place. The instant [data-deleting] applies
+                     here, the row stops matching :hover, and every one
+                     of those children's own hover-cleanup transitions
+                     fires its own "opacity" transitionend — e.g. the
+                     grip fading back out over --d-hover (~90ms) — which
+                     bubbles up and satisfies a bare propertyName check
+                     long before the row's actual 1s fade has gone
+                     anywhere. Caught live: reported as "no fade, it just
+                     loses hover and disappears" — the row was being
+                     finalized off a bubbled child event at ~90ms, not
+                     its own transition at 1000ms. */
+                  if (
+                    e.target === e.currentTarget &&
+                    e.propertyName === "opacity" &&
+                    deletingOut.has(row.id)
+                  )
+                    finalizeDelete(row.id);
                 }}
                 onPointerDown={(e) => onRowPointerDown(e, row.id)}
               >
@@ -1644,18 +1761,19 @@ export default function RowsStudy() {
             );
           })}
 
-          {/* Leaving rows: out of flow immediately (position: absolute,
-              pinned to their last box) so siblings close the gap via
-              FLIP while the ghost flicks away where it stood. It sits
-              below the live rows, which are opaque, so the closing list
-              wipes over it cleanly. A hidden (not deleted) row gets the
-              plain "hiding" fade instead of the bin convergence — hiding
-              isn't destructive, so it shouldn't borrow that metaphor. */}
+          {/* Hidden rows only (see "Hide done"): out of flow immediately
+              (position: absolute, pinned to their last box) so siblings
+              close the gap via FLIP while the ghost fades where it stood,
+              underneath the live rows. Delete no longer uses this path —
+              see deletingIds and the [data-deleting] row above, and
+              globals.css for why an overlay ghost couldn't give delete the
+              "fade first, then the row disappears" sequencing that was
+              asked for. */}
           {ghosts.map((g) => (
             <li
               key={`ghost-${g.row.id}`}
               className="rows-row"
-              data-state={g.kind === "hide" ? "hiding" : "leaving"}
+              data-state="hiding"
               data-out={g.out ? "true" : undefined}
               data-done={g.row.done ? "true" : undefined}
               /* Without this a highlighted row lost its swipe the instant
@@ -1761,7 +1879,7 @@ export default function RowsStudy() {
                   <input
                     type="range"
                     min={40}
-                    max={600}
+                    max={1200}
                     step={10}
                     value={params[key]}
                     onChange={(e) => setParam(key, Number(e.target.value))}
