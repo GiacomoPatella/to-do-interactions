@@ -6,9 +6,9 @@
  * A top-bound, spiral notepad, at every width: the coil, a few leaves
  * under today's page showing at the sides (drawn by .wrap::before), the
  * kraft back board under those, and the pages already used curled over
- * the coil behind it. ?binding=tape swaps the coil for the glued head it
- * replaced, for comparison. A two-page agenda was tried first and
- * dropped: yesterday's page beside today's pulled the eye off the list.
+ * the coil behind it. A two-page agenda was tried first and dropped:
+ * yesterday's page beside today's pulled the eye off the list. A glued
+ * head with binding tape was tried too, and lost to the coil.
  *
  * Every element here is rendered in every skin and shown only by the desk
  * rules in globals.css, so organic and clean never see any of it. All of
