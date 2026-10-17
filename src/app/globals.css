@@ -173,23 +173,37 @@ body {
   line-height: 1.6;
 }
 
-/* Paper grain, organic only: the identity is a bright sheet of paper, and
-   a perfectly flat fill reads as a screen rather than a stock. Fine
-   fractal noise, multiplied at low opacity so it textures the paper
-   without ever being a pattern you'd notice on its own. Off entirely in
-   clean, which is a screen UI and should look like one. Fixed and behind
-   everything (z-index -1) rather than a body background-image, because a
-   background-image has no independent opacity — this needs its own box
-   to fade without washing out --paper underneath it. */
+/* Rough drawing paper, organic only: cold-press tooth you can see, not
+   a grain you have to look for. Off entirely in clean, which is a screen
+   UI and should look like one.
+
+   The tooth is lit, not printed: fractal noise as a height map through
+   feDiffuseLighting, light from the top left, so each bump has a lit
+   side and a shadowed side the way real paper does under a lamp.
+   diffuseConstant is 1/sin(60°), which puts flat paper at exactly white
+   — under multiply, only the shadowed sides of the tooth darken anything,
+   so --paper's colour survives. A second, very low-frequency noise
+   mottles the tooth's strength across the sheet so the tile can't read
+   as a repeat.
+
+   It sits OVER the content (z-index 30), not behind it, and that is the
+   point of the change. Rows are opaque on purpose (see .rows-row) so a
+   fading or hidden row is covered cleanly by its neighbours — behind
+   them, a texture this visible would show every row as a flat strip
+   pasted onto the paper. On top, multiplied, it reads as ink sitting on
+   the tooth, highlighter included. Below the skin toggles (40), which are
+   meta-controls rather than part of the artwork, and the bar (50).
+   Measured on a reorder glide: no frame cost against no texture. */
 html:not([data-variant="clean"]) body::before {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 30;
   pointer-events: none;
-  opacity: 0.06;
+  opacity: 0.22;
   mix-blend-mode: multiply;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 600px 600px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='p' x='0' y='0' width='100%25' height='100%25' color-interpolation-filters='sRGB'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.22' numOctaves='3' seed='3' stitchTiles='stitch' result='n'/%3E%3CfeDiffuseLighting in='n' surfaceScale='0.9' diffuseConstant='1.16' lighting-color='%23fff' result='l'%3E%3CfeDistantLight azimuth='225' elevation='60'/%3E%3C/feDiffuseLighting%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.01' numOctaves='2' seed='8' stitchTiles='stitch' result='m'/%3E%3CfeComposite in='l' in2='m' operator='arithmetic' k1='-0.3' k2='1.15' k3='0' k4='0'/%3E%3CfeColorMatrix values='1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23p)'/%3E%3C/svg%3E");
 }
 
 /* Focus is biro blue everywhere, deliberately not the marker red action
