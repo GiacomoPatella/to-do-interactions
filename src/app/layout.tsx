@@ -1,32 +1,20 @@
 import type { Metadata } from "next";
 import {
   Kalam,
-  Playpen_Sans,
-  Architects_Daughter,
   Figtree,
   DM_Mono,
   Shantell_Sans,
 } from "next/font/google";
 import "./globals.css";
 
-/* Three heading hands, switchable at runtime to compare (organic skin only;
-   clean swaps the title back to Figtree). Each carries its own CSS variable,
-   and --font-display points at whichever data-heading selects. All are
-   legible everyday hands rather than brush scripts — Caveat rendered the
-   "To-Do / To-Day" letterforms awkwardly and is gone. */
+/* Kalam, the title's hand (organic and desk; clean swaps the title back
+   to Figtree). A legible everyday hand rather than a brush script:
+   Playpen and Architects Daughter were compared on a switch and lost,
+   and Caveat rendered the "To-Do / To-Day" letterforms awkwardly. */
 const headKalam = Kalam({
   variable: "--font-head-kalam",
   subsets: ["latin"],
   weight: ["400", "700"],
-});
-const headPlaypen = Playpen_Sans({
-  variable: "--font-head-playpen",
-  subsets: ["latin"],
-});
-const headArchitects = Architects_Daughter({
-  variable: "--font-head-architects",
-  subsets: ["latin"],
-  weight: ["400"],
 });
 
 /* Figtree does the reading: lede, notes, and every row title. Warm and
@@ -67,7 +55,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${headKalam.variable} ${headPlaypen.variable} ${headArchitects.variable} ${text.variable} ${mono.variable} ${hand.variable}`}
+      className={`${headKalam.variable} ${text.variable} ${mono.variable} ${hand.variable}`}
       /* The script below writes data-variant before React hydrates. */
       suppressHydrationWarning
     >

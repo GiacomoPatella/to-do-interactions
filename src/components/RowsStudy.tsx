@@ -409,24 +409,6 @@ const VARIANTS: { value: Variant; label: string }[] = [
   { value: "clean", label: "Clean" },
 ];
 
-/* Heading-font options for the organic title, compared via their own toggle.
-   Each preview renders in its own face. */
-type Heading = "kalam" | "playpen" | "architects";
-const HEADINGS: { value: Heading; label: string; cssVar: string }[] = [
-  { value: "kalam", label: "Kalam", cssVar: "--font-head-kalam" },
-  { value: "playpen", label: "Playpen", cssVar: "--font-head-playpen" },
-  { value: "architects", label: "Architects", cssVar: "--font-head-architects" },
-];
-
-/* The same idea for the row text, hand skins only as well: clean is tuned
-   for Figtree throughout. Shantell is the hand everything else is set in,
-   and the rest reuse the title faces, which are already loaded. */
-type RowFont = "shantell" | Heading;
-const ROW_FONTS: { value: RowFont; label: string; cssVar: string }[] = [
-  { value: "shantell", label: "Shantell", cssVar: "--font-hand" },
-  ...HEADINGS,
-];
-
 export default function RowsStudy() {
   const [rows, setRows] = useState<Row[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -474,8 +456,6 @@ export default function RowsStudy() {
   /* Two skins, switchable at runtime for comparison. The attribute lives on
      <html> so it also reaches the title, which renders outside this tree. */
   const [variant, setVariant] = useState<Variant>("desk");
-  const [heading, setHeading] = useState<Heading>("kalam");
-  const [rowFont, setRowFont] = useState<RowFont>("shantell");
   /* Whether completing a row sinks it below the open ones. On by
      default; off, a completed row stays exactly where it was. */
   const [sinkDone, setSinkDone] = useState(true);
@@ -495,12 +475,6 @@ export default function RowsStudy() {
   useEffect(() => {
     const stored = localStorage.getItem("gp-lab-variant");
     if (stored === "clean" || stored === "organic") setVariant(stored);
-    const h = localStorage.getItem("gp-lab-heading");
-    if (h === "playpen" || h === "architects") setHeading(h);
-    const rf = localStorage.getItem("gp-lab-row-font");
-    if (rf === "kalam" || rf === "playpen" || rf === "architects") {
-      setRowFont(rf);
-    }
     const hd = localStorage.getItem("gp-lab-hide-done");
     if (hd === "true") setHideDone(true);
     if (localStorage.getItem("gp-lab-sink-done") === "false") {
@@ -511,14 +485,6 @@ export default function RowsStudy() {
     document.documentElement.dataset.variant = variant;
     localStorage.setItem("gp-lab-variant", variant);
   }, [variant]);
-  useEffect(() => {
-    document.documentElement.dataset.heading = heading;
-    localStorage.setItem("gp-lab-heading", heading);
-  }, [heading]);
-  useEffect(() => {
-    document.documentElement.dataset.rowFont = rowFont;
-    localStorage.setItem("gp-lab-row-font", rowFont);
-  }, [rowFont]);
   useEffect(() => {
     localStorage.setItem("gp-lab-hide-done", String(hideDone));
   }, [hideDone]);
@@ -1564,50 +1530,6 @@ export default function RowsStudy() {
           </button>
         ))}
       </div>
-
-      {variant !== "clean" && (
-        <div
-          className="variant-toggle heading-toggle"
-          role="group"
-          aria-label="heading font"
-        >
-          {HEADINGS.map(({ value, label, cssVar }) => (
-            <button
-              key={value}
-              type="button"
-              className="variant-opt"
-              data-active={heading === value ? "true" : undefined}
-              aria-pressed={heading === value}
-              style={{ fontFamily: `var(${cssVar})` }}
-              onClick={() => setHeading(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {variant !== "clean" && (
-        <div
-          className="variant-toggle heading-toggle row-font-toggle"
-          role="group"
-          aria-label="list font"
-        >
-          {ROW_FONTS.map(({ value, label, cssVar }) => (
-            <button
-              key={value}
-              type="button"
-              className="variant-opt"
-              data-active={rowFont === value ? "true" : undefined}
-              aria-pressed={rowFont === value}
-              style={{ fontFamily: `var(${cssVar})` }}
-              onClick={() => setRowFont(value)}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
 
       <form
         className="rows-add"

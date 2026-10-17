@@ -60,13 +60,11 @@ page turn applies in all three.
 - **organic** — felt-tip sketchbook, full-bleed paper: warm paper, uneven radii, every
   straight edge displaced through the `#rough` SVG filter. The hand is not
   confined to the marks, it sets the whole interface: Shantell Sans reads *and*
-  does the instrumentation, with Kalam on the title. A second toggle
-  (`data-heading`, organic only) swaps the title between Kalam / Playpen /
-  Architects; Kalam is the current pick. Caveat was tried and rejected — its
-  letterforms read badly at this size. A third toggle (`data-row-font`,
-  organic only) does the same for the row text alone — titles, edit input,
-  composer — offering Shantell plus the three title faces, so it costs no
-  extra font downloads. Instrumentation stays Shantell regardless.
+  does the instrumentation, with Kalam on the title. Settled 2026-10-18:
+  title and row-text font switchers (Playpen, Architects Daughter, and
+  Kalam for rows) were compared live and removed, keeping Kalam and
+  Shantell. Caveat was tried earlier and rejected — its letterforms read
+  badly at this size.
 - **clean** — Figtree, DM Mono, straight edges, `--stroke-filter: none`, one
   indigo accent.
 

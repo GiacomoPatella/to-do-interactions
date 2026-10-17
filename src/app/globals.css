@@ -93,13 +93,12 @@
   --font-clean-mono: var(--font-mono-src), ui-monospace, "SF Mono", Menlo,
     monospace;
 
-  /* Default heading hand; data-heading swaps it, clean overrides it. */
+  /* The title's hand, Kalam; clean overrides it. */
   --font-display: var(--font-head-kalam), "Bradley Hand", cursive;
   --font-sans: var(--font-hand);
   --font-mono: var(--font-hand);
-  /* The row text alone — titles, the edit input, the composer — so
-     data-row-font can swap the face you read without touching the
-     instrumentation. Defaults to the hand everything else is set in. */
+  /* The row text alone — titles, the edit input, the composer. The
+     same hand as everything else here; clean resets it to its sans. */
   --font-row: var(--font-hand);
 
   /* Every straight edge is drawn through this. The clean skin sets it to
@@ -118,28 +117,6 @@
   width: 0;
   height: 0;
   overflow: hidden;
-}
-
-/* Heading-font switch. Scoped early so the clean skin's --font-display
-   override (later in the file) still wins for the clean title. */
-[data-heading="playpen"] {
-  --font-display: var(--font-head-playpen), "Bradley Hand", cursive;
-}
-[data-heading="architects"] {
-  --font-display: var(--font-head-architects), "Bradley Hand", cursive;
-}
-/* Row-font switch, same mechanism and same scoping trick: the clean
-   skin resets --font-row later in the file and wins. The candidates are
-   the faces already loaded for the title, so the switch costs no extra
-   downloads. */
-[data-row-font="kalam"] {
-  --font-row: var(--font-head-kalam), "Bradley Hand", cursive;
-}
-[data-row-font="playpen"] {
-  --font-row: var(--font-head-playpen), "Bradley Hand", cursive;
-}
-[data-row-font="architects"] {
-  --font-row: var(--font-head-architects), "Bradley Hand", cursive;
 }
 
 /* A handwriting face reads smaller than a clean sans at the same pixel
@@ -1931,23 +1908,8 @@ input[type="range"] {
   color: var(--paper);
 }
 
-/* The heading-font switch sits under the skin switch and previews each face
-   in its own letters. */
-.heading-toggle {
-  top: calc(var(--sp-4) + 2.6rem);
-}
-.heading-toggle .variant-opt {
-  font-size: var(--text-sm);
-  line-height: 1.1;
-}
-
-/* The row-font switch: a third pill under the heading one, same
-   preview-in-its-own-face idea. The faces themselves are applied last in
-   the file, after every `font: inherit` on these elements, so the
-   variable actually lands. */
-.row-font-toggle {
-  top: calc(var(--sp-4) + 5.2rem);
-}
+/* Last in the file on purpose, after every `font: inherit` on these
+   elements, so the variable actually lands. */
 .rows-title,
 .rows-edit,
 .rows-input {
@@ -2055,13 +2017,13 @@ html[data-variant="desk"] .wrap::after {
   background-size: 600px 600px;
   background-image: var(--paper-tooth);
 }
-/* On a phone the three style toggles, stacked top-right, would sit on
-   the page's title: the page starts at the top, unlike organic's
+/* On a phone the skin toggle, top-right, would sit on the page's
+   title: the page starts at the top, unlike organic's
    centred column. Start the page below them instead, so they rest on
    the desk. */
 @media (max-width: 40rem) {
   html[data-variant="desk"] .wrap {
-    margin-top: calc(var(--sp-4) + 8.4rem + 1.25rem);
+    margin-top: calc(var(--sp-4) + 3.2rem + 1.25rem);
   }
 }
 
