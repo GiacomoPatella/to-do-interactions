@@ -396,11 +396,15 @@ function FadeIn({
   );
 }
 
-/* Three switchable looks: two organic hands over the same rough-stroke skin,
-   and one clean modern UI. The value is written to <html data-variant> so it
-   also reaches the title, which lives outside this component. */
-type Variant = "organic" | "clean";
+/* Three switchable looks. Desk is the full scene — organic's ink on a
+   notebook page on a desk — and the default; organic and clean are the
+   plain options for anyone who wants just the list. The value is written
+   to <html data-variant> so it also reaches the title, which lives outside
+   this component, and an inline script in layout.tsx sets it before first
+   paint so the desk never flashes in over a full-bleed page. */
+type Variant = "desk" | "organic" | "clean";
 const VARIANTS: { value: Variant; label: string }[] = [
+  { value: "desk", label: "Desk" },
   { value: "organic", label: "Organic" },
   { value: "clean", label: "Clean" },
 ];
@@ -414,7 +418,7 @@ const HEADINGS: { value: Heading; label: string; cssVar: string }[] = [
   { value: "architects", label: "Architects", cssVar: "--font-head-architects" },
 ];
 
-/* The same idea for the row text, organic only as well: clean is tuned
+/* The same idea for the row text, hand skins only as well: clean is tuned
    for Figtree throughout. Shantell is the hand everything else is set in,
    and the rest reuse the title faces, which are already loaded. */
 type RowFont = "shantell" | Heading;
@@ -469,7 +473,7 @@ export default function RowsStudy() {
   const [live, setLive] = useState("");
   /* Two skins, switchable at runtime for comparison. The attribute lives on
      <html> so it also reaches the title, which renders outside this tree. */
-  const [variant, setVariant] = useState<Variant>("organic");
+  const [variant, setVariant] = useState<Variant>("desk");
   const [heading, setHeading] = useState<Heading>("kalam");
   const [rowFont, setRowFont] = useState<RowFont>("shantell");
   /* Whether completing a row sinks it below the open ones. On by
@@ -490,7 +494,7 @@ export default function RowsStudy() {
 
   useEffect(() => {
     const stored = localStorage.getItem("gp-lab-variant");
-    if (stored === "clean") setVariant("clean");
+    if (stored === "clean" || stored === "organic") setVariant(stored);
     const h = localStorage.getItem("gp-lab-heading");
     if (h === "playpen" || h === "architects") setHeading(h);
     const rf = localStorage.getItem("gp-lab-row-font");
@@ -1561,7 +1565,7 @@ export default function RowsStudy() {
         ))}
       </div>
 
-      {variant === "organic" && (
+      {variant !== "clean" && (
         <div
           className="variant-toggle heading-toggle"
           role="group"
@@ -1583,7 +1587,7 @@ export default function RowsStudy() {
         </div>
       )}
 
-      {variant === "organic" && (
+      {variant !== "clean" && (
         <div
           className="variant-toggle heading-toggle row-font-toggle"
           role="group"

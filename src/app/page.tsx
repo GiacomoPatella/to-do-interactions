@@ -1,3 +1,5 @@
+import Booklet from "@/components/Booklet";
+import Desk from "@/components/Desk";
 import RowsStudy from "@/components/RowsStudy";
 
 /* Stripped back to the app itself. The lede, the "how it moves, honestly"
@@ -7,11 +9,16 @@ import RowsStudy from "@/components/RowsStudy";
 export default function Home() {
   return (
     <>
+      {/* The desk skin's wood. Hidden in organic and clean. */}
+      <Desk />
       <a className="skip-link" href="#main">
         skip to content
       </a>
 
       <main id="main" className="wrap">
+        {/* The desk skin's agenda / notepad. Renders nothing visible in
+            organic or clean. */}
+        <Booklet />
         <h1>
           To-Do <span className="hl">To-Day</span>
           {/* A margin doodle in the felt-tip hand — a little sun for

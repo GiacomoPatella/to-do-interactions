@@ -68,7 +68,24 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${headKalam.variable} ${headPlaypen.variable} ${headArchitects.variable} ${text.variable} ${mono.variable} ${hand.variable}`}
+      /* The script below writes data-variant before React hydrates. */
+      suppressHydrationWarning
     >
+      <head>
+        {/* Set the skin before first paint. The skins differ in layout,
+            not just colour — desk draws the page as a sheet on a desk,
+            organic fills the window — so applying it after hydration
+            jumped the whole app on load. Desk is the default. */}
+        <script
+          dangerouslySetInnerHTML={{
+            /* The desk's notepad too, for the same reason: its binding
+               changes the page's layout. TEMPORARY comparison overrides,
+               to delete once settled: ?book=agenda brings back the
+               two-page spread, ?binding=tape the glued head. */
+            __html: `try{var v=localStorage.getItem("gp-lab-variant");document.documentElement.dataset.variant=v==="organic"||v==="clean"?v:"desk"}catch(e){document.documentElement.dataset.variant="desk"}try{var q=new URLSearchParams(location.search);document.documentElement.dataset.book=q.get("book")==="agenda"?"agenda":"notepad";document.documentElement.dataset.binding=q.get("binding")==="tape"?"tape":"spiral"}catch(e){}`,
+          }}
+        />
+      </head>
       <body>
         {/* One roughen filter, referenced by the organic skin as
             filter: url(#rough). It displaces straight edges into a drawn

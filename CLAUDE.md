@@ -37,11 +37,27 @@ the deliverable — the commented reasoning is what is actually being shown.
 *To-Do*; the title highlights the second half. Light mode only, on purpose —
 there is no `prefers-color-scheme` block and there should not be one.
 
-**Two skins ship, and both are keepers.** A pill toggle top-right sets
-`data-variant` on `<html>` (persisted as `gp-lab-variant`), and the whole
-difference is a token block plus `--stroke-filter`:
+**Three skins: desk (in progress, the default), organic and clean.** A
+pill toggle top-right sets `data-variant` on `<html>` (persisted as
+`gp-lab-variant`). Decided 2026-10-17: **desk** is the realistic, full-on
+version — see "The one-day list" below — and organic and clean stay as
+the options for people who want a plain to-do list without the scene.
+Skins differ in look and atmosphere only, never in rules: the midnight
+page turn applies in all three.
 
-- **organic** — the default. Felt-tip sketchbook: warm paper, uneven radii, every
+- **desk** — organic's ink and hand, on a spiral-bound notepad lying on
+  an oiled walnut desk, all drawn in code: the wood in WebGL2
+  (`desk-wood.ts`, baked once, relit cheaply), the notepad in CSS around
+  the page (`Booklet.tsx`): coil, leaves at the sides, kraft back board,
+  used pages curled over the coil. Notepad at every width — a two-page
+  agenda was tried and dropped because yesterday's page pulled focus off
+  today's. Everything organic does applies (it matches every
+  `html:not([data-variant="clean"])` rule); the paper texture moves off
+  the viewport and onto the page. Built in steps, each judged before the
+  next: (1) the page on the desk, static; (2) light that follows local
+  time, a lamp at night, a clock scrub control in the bar; (3) ambient
+  leaf shadows and clouds; (4) rare events such as a bird's shadow.
+- **organic** — felt-tip sketchbook, full-bleed paper: warm paper, uneven radii, every
   straight edge displaced through the `#rough` SVG filter. The hand is not
   confined to the marks, it sets the whole interface: Shantell Sans reads *and*
   does the instrumentation, with Kalam on the title. A second toggle
@@ -88,13 +104,60 @@ of it as quiet work rather than signature moments:
   something to edit. A persistent input box above the list looked like a form to
   fill out rather than an invitation.
 
-Nothing else is committed, and that is the position, not a gap. A third narrated
-interaction would weaken the two that carry the piece. Add one only with a
-specific reason, and expect to retire something in exchange.
+Beyond the one-day list below, nothing else is committed, and that is the
+position, not a gap. A third narrated interaction would weaken the two that
+carry the piece. Add one only with a specific reason, and expect to retire
+something in exchange.
 
 ---
 
 ## Settled decisions. Do not silently revisit
+
+### The one-day list: the page turns at midnight · DECIDED 2026-10-17, unbuilt
+
+The north star, and what the name promises: *To-Day* is literal. Every
+decision below was argued from how people actually respond to to-do lists,
+and the reasoning matters more than the mechanics:
+
+- **All skins, no exceptions.** The rule is about whether your tasks
+  survive; a skin is a look. Tying it to one skin would let you dodge
+  midnight by switching to clean at 11:58, which makes the rule
+  meaningless. Each skin expresses it in its own language — desk fully
+  (ink, paper, room light, page turn), organic as ink and paper, clean as
+  plain contrast and a quiet countdown in the status line. If an opt-out
+  is ever wanted, it is a separate setting in the List drawer, never a side
+  effect of a skin — and it should not ship at launch, because the reset is
+  the point.
+- **Midnight is a page turn, not a wipe.** Yesterday's page still exists,
+  face-down; you just can't write on it. Honest about what happened, and it
+  keeps faith with the app's undo-everything semantics.
+- **One item carries over: chosen, never earned.** Earning it (finish
+  everything else first) takes it away on exactly the days that went
+  badly, and losing everything after a bad day is how people quietly
+  abandon an app. Carrying everything is a normal to-do list and its
+  growing guilt backlog — the problem this exists to solve. Exactly one
+  makes the choice mean something. The choice happens **on next open**,
+  not at midnight (people are asleep): the page has already turned, and
+  you can pull one unfinished item across from yesterday's page — only
+  yesterday's, or it becomes an archive to dig through. Skip it and
+  nothing carries. A highlighted row is the natural default suggestion.
+- **Decay starts at dusk and accelerates to midnight (ease-in).** Pristine
+  all day: decay running from the morning makes 10am feel behind and is
+  too faint to motivate anyway. Evening is when time left becomes salient.
+  **Only open rows decay**; completed rows stay crisp as the record of
+  what got done, so the pressure lands only where action is possible.
+  **There is a readability floor**: at 11:55 the ink feels nearly gone but
+  is still comfortably legible. A list you cannot read is broken, whatever
+  it is saying.
+- **Midnight, not 4am.** Night owls lose half their "today", and many apps
+  roll over at 4am for that reason. Kept at midnight knowingly: the
+  deadline is the concept.
+- **First visit late at night** gets one quiet status-line line ("this page
+  turns at midnight"), so a portfolio visitor at 11:30pm doesn't land on a
+  faded page with no idea why. Information, not commentary — the "no
+  research paragraphs" ruling still holds.
+- **Night is a lamp, not dark mode.** In desk, the room goes dark and a
+  warm lamp lights the page; the paper stays light. Light-mode-only stands.
 
 ### No animation library. CSS and WAAPI only
 
