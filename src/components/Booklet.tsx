@@ -1,7 +1,9 @@
 /**
  * The stationery around the desk skin's page: everything that makes the
  * page a notepad rather than a loose sheet. None of it is interactive and
- * none of it moves — it is the object the list is written in.
+ * none of it moves — it is the object the list is written in. The one
+ * exception is the light falling on it (.book-light), which follows the
+ * time of day.
  *
  * A top-bound, spiral notepad, at every width: the coil, a few leaves
  * under today's page showing at the sides (drawn by .wrap::before), the
@@ -21,6 +23,7 @@ export default function Booklet() {
       <div className="book-cover" aria-hidden="true" />
       <div className="book-used" aria-hidden="true" />
       <div className="book-binding" aria-hidden="true" />
+      <div className="book-light" aria-hidden="true" />
     </>
   );
 }

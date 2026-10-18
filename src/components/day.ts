@@ -58,3 +58,80 @@ export function turnCountdown(ms: number) {
   const m = left % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
+
+/* ---- the room's light, desk only ----
+
+   Two numbers the stylesheet reads: `night`, how far the room has gone
+   to lamplight (0 day, 1 dark room and lamp on), and `warm`, how golden
+   the window light is (dawn and the hour before dusk). A fixed daily
+   curve rather than a real sunset, for the same reason dusk is fixed:
+   the light and the decay should tell the same story every evening.
+
+   Self-contained on purpose: layout.tsx inlines this function's source
+   into the pre-paint script, so a night visit never flashes daylight
+   before hydration. It must not reference anything outside itself. */
+export function roomLight(m: number): { night: number; warm: number } {
+  // minute of day, night, warm
+  const k = [
+    [0, 1, 0],
+    [330, 1, 0],
+    [420, 0.2, 0.7],
+    [510, 0, 0],
+    [1020, 0, 0],
+    [1110, 0.05, 1],
+    [1185, 0.7, 0.55],
+    [1230, 1, 0],
+    [1440, 1, 0],
+  ];
+  let i = 0;
+  while (i < k.length - 2 && m >= k[i + 1][0]) i++;
+  const a = k[i];
+  const b = k[i + 1];
+  const t = Math.min(1, Math.max(0, (m - a[0]) / (b[0] - a[0])));
+  const s = t * t * (3 - 2 * t);
+  return {
+    night: a[1] + (b[1] - a[1]) * s,
+    warm: a[2] + (b[2] - a[2]) * s,
+  };
+}
+
+export type Sky = {
+  /** Window light: azimuth and elevation in degrees, colour, strength. */
+  az: number;
+  el: number;
+  rgb: [number, number, number];
+  intensity: number;
+  amb: [number, number, number];
+  /** The desk lamp, 0 off to 1 full. */
+  lamp: number;
+};
+
+const mix = (a: number, b: number, t: number) => a + (b - a) * t;
+const mix3 = (
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number,
+): [number, number, number] => [mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t)];
+
+/** The desk's lighting at a minute of the day, for desk-wood.ts. Built on
+    roomLight so the wood and the page always agree: the sun arcs through
+    the window from the left in the morning to higher and squarer at
+    midday and back down, the light warms with `warm`, and as `night`
+    rises the window goes and the lamp takes over. */
+export function skyAt(m: number): Sky {
+  const { night, warm } = roomLight(m);
+  const day = Math.min(1, Math.max(0, (m - 390) / (1215 - 390)));
+  const arc = Math.sin(Math.PI * day);
+  return {
+    az: mix(-42, -8, day),
+    el: 8 + 52 * arc,
+    rgb: mix3([1, 0.98, 0.95], [1, 0.8, 0.58], warm),
+    intensity: 2.3 * (1 - night) * (0.6 + 0.4 * arc),
+    amb: mix3(
+      mix3([0.3, 0.32, 0.36], [0.3, 0.26, 0.22], warm),
+      [0.028, 0.03, 0.045],
+      night,
+    ),
+    lamp: night,
+  };
+}

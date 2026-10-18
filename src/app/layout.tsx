@@ -5,6 +5,7 @@ import {
   DM_Mono,
   Shantell_Sans,
 } from "next/font/google";
+import { roomLight } from "@/components/day";
 import "./globals.css";
 
 /* Kalam, the title's hand (organic and desk; clean swaps the title back
@@ -67,6 +68,15 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `try{var v=localStorage.getItem("gp-lab-variant");document.documentElement.dataset.variant=v==="organic"||v==="clean"?v:"desk"}catch(e){document.documentElement.dataset.variant="desk"}`,
+          }}
+        />
+        {/* The desk's room light, for the same reason: at night a page
+            that paints in daylight and then goes dark is a flash in the
+            face. roomLight is the same function Desk.tsx uses after
+            hydration, inlined by its source, so the two cannot drift. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var d=new Date(),l=(${roomLight.toString()})(d.getHours()*60+d.getMinutes()),s=document.documentElement.style;s.setProperty("--night",l.night.toFixed(3));s.setProperty("--warm",l.warm.toFixed(3))}catch(e){}`,
           }}
         />
       </head>

@@ -7,10 +7,9 @@
       height / grain angle / roughness / specular mask. Runs once, and
       again only when the width or the pixel ratio changes.
    2. LIGHT — cheap, ~2ms. Reads those textures, derives the normal from
-      the height field, and shades with the current light. Step 2 (light
-      that follows the time of day) only ever re-runs this pass: the time
-      of day moves the light, not the wood. Until then the light is one
-      fixed, soft daylight.
+      the height field, and shades with the current light. The time of
+      day only ever re-runs this pass: it moves the light, not the wood.
+      The light itself comes from skyAt() in day.ts.
 
    Nothing renders per frame. The canvas is fixed behind the page, so
    scrolling never touches WebGL.
@@ -24,6 +23,8 @@
    is rough, and its glow along the fibre is broad and dim. Matte
    wood reads lighter than glossy at the same exposure, so the
    exposure comes down to keep it walnut rather than teak. */
+
+import type { Sky } from "./day";
 
 const COMMON = `#version 300 es
 precision highp float;
@@ -207,7 +208,9 @@ void main() {
 }
 `;
 
-/* The lamp terms are here for step 2's night; off until then. */
+/* Window light plus a desk lamp. The lamp sits up and to the right of
+   the page, so at night the light pools on the pad and falls away across
+   the wood. */
 const LIGHT_FS = `#version 300 es
 precision highp float;
 precision highp int;
@@ -365,26 +368,35 @@ const FINISH = {
   env: 0.3,
 };
 
-/* Step 1's one light: soft daylight from a window up and to the left.
-   Step 2 replaces this with the time of day. */
-const DAYLIGHT = {
-  az: -25,
-  el: 58,
-  rgb: [1.0, 0.98, 0.95],
-  intensity: 2.3,
-  amb: [0.3, 0.32, 0.36],
+/* The desk lamp: warm, incandescent, a little above the desk. Its
+   position is in viewport px, and the page's own lamplight in
+   globals.css (.book-light) is centred on the same spot, so the wood and
+   the paper agree about where the light is. */
+const LAMP = {
+  x: 0.8,
+  y: 0.16,
+  z: 380,
+  rgb: [1.0, 0.76, 0.5],
+  intensity: 3.2,
+  radius: 520,
 };
 
-/* Draws the desk into `canvas` and keeps it current. Returns a cleanup
-   function. If WebGL2 is unavailable or the context is lost, the canvas
-   simply never gets data-ready and the CSS fallback under it shows. */
-export function startDesk(canvas: HTMLCanvasElement): () => void {
+/* Draws the desk into `canvas` under `sky` and keeps it current. Returns
+   a cleanup function and a relight for when the time of day moves. If
+   WebGL2 is unavailable or the context is lost, the canvas simply never
+   gets data-ready and the CSS fallback under it shows. */
+export function startDesk(
+  canvas: HTMLCanvasElement,
+  initialSky: Sky,
+): { stop: () => void; setSky: (sky: Sky) => void } {
+  const none = { stop: () => {}, setSky: () => {} };
+  let sky = initialSky;
   const gl = canvas.getContext("webgl2", {
     antialias: false,
     alpha: false,
     preserveDrawingBuffer: false,
   });
-  if (!gl) return () => {};
+  if (!gl) return none;
   const g = gl;
 
   function compile(type: number, src: string) {
@@ -413,7 +425,7 @@ export function startDesk(canvas: HTMLCanvasElement): () => void {
     lightProg = program(LIGHT_FS);
   } catch (err) {
     console.error(err);
-    return () => {};
+    return none;
   }
   g.bindVertexArray(g.createVertexArray());
 
@@ -486,7 +498,7 @@ export function startDesk(canvas: HTMLCanvasElement): () => void {
   }
 
   function light() {
-    const s = DAYLIGHT;
+    const s = sky;
     const az = (s.az * Math.PI) / 180,
       el = (s.el * Math.PI) / 180;
     const key = [Math.sin(az) * Math.cos(el), -Math.cos(az) * Math.cos(el), Math.sin(el)];
@@ -505,10 +517,10 @@ export function startDesk(canvas: HTMLCanvasElement): () => void {
     g.uniform3fv(u("uKeyCol"), s.rgb.map((v) => v * s.intensity));
     g.uniform1f(u("uKeyFall"), 0.45);
     g.uniform3fv(u("uAmb"), s.amb);
-    g.uniform1f(u("uLampOn"), 0);
-    g.uniform3fv(u("uLampPos"), [innerWidth * 0.8, innerHeight * 0.16, 380]);
-    g.uniform3fv(u("uLampCol"), [0, 0, 0]);
-    g.uniform1f(u("uLampR"), 520);
+    g.uniform1f(u("uLampOn"), s.lamp > 0.01 ? 1 : 0);
+    g.uniform3fv(u("uLampPos"), [innerWidth * LAMP.x, innerHeight * LAMP.y, LAMP.z]);
+    g.uniform3fv(u("uLampCol"), LAMP.rgb.map((v) => v * LAMP.intensity * s.lamp));
+    g.uniform1f(u("uLampR"), LAMP.radius);
     g.uniform1f(u("uBump"), FINISH.bump);
     g.uniform1f(u("uCoatFill"), FINISH.coatFill);
     g.uniform1f(u("uSheenExp"), FINISH.sheenExp);
@@ -545,11 +557,19 @@ export function startDesk(canvas: HTMLCanvasElement): () => void {
   }
   canvas.addEventListener("webglcontextlost", onLost);
 
-  return () => {
-    cancelIdle(first);
-    window.clearTimeout(rt);
-    removeEventListener("resize", onResize);
-    canvas.removeEventListener("webglcontextlost", onLost);
-    g.getExtension("WEBGL_lose_context")?.loseContext();
+  return {
+    stop() {
+      cancelIdle(first);
+      window.clearTimeout(rt);
+      removeEventListener("resize", onResize);
+      canvas.removeEventListener("webglcontextlost", onLost);
+      g.getExtension("WEBGL_lose_context")?.loseContext();
+    },
+    /* The cheap pass only, and only once the bake has landed: before
+       that, the bake will light with whatever `sky` is by then. */
+    setSky(next: Sky) {
+      sky = next;
+      if (W > 0 && canvas.dataset.ready !== undefined) light();
+    },
   };
 }
