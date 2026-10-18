@@ -272,6 +272,13 @@ export function ShadeScene() {
    add (composite: "add"), so one arriving on another doesn't snap it
    back. Off under reduced motion; the shadow itself stays.
 
+   Between breezes, a drift: air indoors is never quite still, so each
+   branch wanders by a tenth of a degree or two, slowly, the whole time.
+   Kept at the edge of noticing — a tip moves a pixel or two over many
+   seconds — because the near-stillness is what lets a breeze read; any
+   more and it's the slow-motion sway again. A minute-long loop of a few
+   slow, unrelated wobbles per branch, so it never visibly repeats.
+
    The clouds: a cloud over the sun doesn't sweep a shadow edge across a
    room the way it does across a field. The window is lit by the sun's
    disc, so the whole patch of sunlight dims at once over a few seconds,
@@ -321,6 +328,34 @@ const BREEZES: { swells: Swell[]; turb: number }[] = [
     turb: 0.45,
   },
 ];
+
+/* The drift, as a seamless minute-long loop: three or four wobbles per
+   branch at whole numbers of cycles per minute, from 3 to 11, so the
+   loop closes on itself, with phases from the branch's own seed so both
+   copies of a branch drift the same. `give` sets the scale: the near
+   branch drifts most. */
+const DRIFT_MS = 60_000;
+function drift(give: number, seed: number): Keyframe[] {
+  const r = rng(seed);
+  const waves = [3, 5, 7, 11].map((n) => ({
+    w: 2 * Math.PI * n,
+    p: r() * 2 * Math.PI,
+    a: 1 / Math.sqrt(n),
+  }));
+  const norm = waves.reduce((s, o) => s + o.a, 0);
+  const at = (u: number, shift: number) =>
+    waves.reduce((s, o) => s + o.a * Math.sin(o.w * u + o.p + shift), 0) / norm;
+  const frames: Keyframe[] = [];
+  for (let i = 0; i <= 240; i++) {
+    const u = i / 240;
+    const deg = give * 0.13 * at(u, 0);
+    const px = give * 0.6 * at(u, 1.9);
+    frames.push({
+      transform: `rotate(${deg.toFixed(3)}deg) translate(${px.toFixed(2)}px, ${(px * 0.6).toFixed(2)}px)`,
+    });
+  }
+  return frames;
+}
 
 const SETTLE = 1.6;
 const ease = (t: number) =>
@@ -441,8 +476,19 @@ export function startAmbient(opts: {
     });
     return longest;
   }
-  if (!reduced)
+  if (!reduced) {
     breezeTimer = window.setTimeout(breeze, 2_000 + Math.random() * 4_000);
+    document.querySelectorAll<HTMLElement>(".shade-branch").forEach((el) => {
+      const give = Number(el.dataset.give);
+      const a = el.animate(drift(give, Math.round(give * 1000)), {
+        duration: DRIFT_MS,
+        iterations: Infinity,
+        easing: "linear",
+      });
+      // One timeline for both copies of the scene, whenever each mounted.
+      a.startTime = 0;
+    });
+  }
 
   let timer = 0;
   const schedule = (ms: number) => {

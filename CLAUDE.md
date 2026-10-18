@@ -60,7 +60,8 @@ page turn applies in all three.
   Steps 1 and 2 are built, and step 3's first half: the shadow of a
   plant on the sill, stirred now and then by a breeze (a simulated push
   on damped stems, four kinds in shuffled rotation; a steady sway read
-  as slow motion, a struck impulse as someone tapping it), crossing the
+  as slow motion, a struck impulse as someone tapping it) over a faint
+  idle drift, crossing the
   title but never the list, and clouds that dim the window light now and
   then (`Shade.tsx`, drawn twice, over the
   wood and over the pad, on one timeline). The light is a fixed daily curve, not a real
