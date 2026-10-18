@@ -282,10 +282,17 @@ export function ShadeScene() {
    The clouds: a cloud over the sun doesn't sweep a shadow edge across a
    room the way it does across a field. The window is lit by the sun's
    disc, so the whole patch of sunlight dims at once over a few seconds,
-   the leaf shadows soften away with it, and it all comes back. That's
+   the leaf shadows soften with it, and it all comes back. That's
    opacity only, so it plays the same under reduced motion. How cloudy
    it is is decided once a day, from the date: some days a cloud every
-   minute or so, some days one every few minutes. */
+   minute or so, some days one every few minutes.
+
+   Clouds pass; they don't settle. A cloud only reads as one while it
+   arrives and leaves — once it's fully over, the scene is just flatter
+   — so each is over in 6 to 14 seconds, the leaves soften to about a
+   third rather than vanish, and none comes in the first 45 seconds of
+   a visit, so nobody lands on an overcast desk and takes that for the
+   scene. */
 
 /* The four kinds of breeze. Each is one or more swells of air, times
    in seconds: when it starts, how long it takes to build, holds, and
@@ -512,10 +519,10 @@ export function startAmbient(opts: {
     }
     // A thin cloud or a thick one, and never quite even while it's over.
     const depth = 0.45 + Math.random() * 0.55;
-    const duration = 16_000 + Math.random() * 40_000;
+    const duration = 6_000 + Math.random() * 8_000;
     const mid = () => depth * (0.7 + Math.random() * 0.3);
     const dim = [0, depth, mid(), depth, mid(), depth, 0];
-    const offsets = [0, 0.14, 0.3, 0.5, 0.68, 0.84, 1];
+    const offsets = [0, 0.25, 0.4, 0.5, 0.6, 0.75, 1];
     const timing: KeyframeAnimationOptions = { duration, easing: "linear" };
     const now = document.timeline.currentTime;
     document.querySelectorAll<HTMLElement>(".shade-cloud").forEach((el) => {
@@ -532,7 +539,7 @@ export function startAmbient(opts: {
     document.querySelectorAll<HTMLElement>(".shade-gap").forEach((el) => {
       const a = el.animate(
         dim.map((o, i) => ({
-          opacity: 1 - o * 0.85,
+          opacity: 1 - o * 0.65,
           offset: offsets[i],
           easing: "ease-in-out",
         })),
@@ -542,8 +549,8 @@ export function startAmbient(opts: {
     });
     schedule(duration + gap());
   }
-  // The first one soon, so a visit sees the weather at all.
-  schedule(12_000 + Math.random() * 25_000);
+  // Not on arrival: the first look is the full scene.
+  schedule(45_000 + Math.random() * 45_000);
   // In development, `__cloud()` in the console passes one now, and
   // `__breeze(0–3)` blows one of the four breezes.
   if (process.env.NODE_ENV !== "production") {
