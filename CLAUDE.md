@@ -57,6 +57,10 @@ page turn applies in all three.
   next: (1) the page on the desk, static; (2) light that follows local
   time, a lamp at night, a clock scrub control in the bar; (3) ambient
   leaf shadows and clouds; (4) rare events such as a bird's shadow.
+  Steps 1 and 2 are built. The light is a fixed daily curve, not a real
+  sunset (`roomLight` / `skyAt` in `day.ts`): it drives the WebGL relight
+  and `.book-light`, a multiply layer on the pad, and `layout.tsx` inlines
+  `roomLight`'s source so a night visit paints dark from the first frame.
 - **organic** — felt-tip sketchbook, full-bleed paper: warm paper, uneven radii, every
   straight edge displaced through the `#rough` SVG filter. The hand is not
   confined to the marks, it sets the whole interface: Shantell Sans reads *and*
@@ -102,7 +106,7 @@ of it as quiet work rather than signature moments:
   something to edit. A persistent input box above the list looked like a form to
   fill out rather than an invitation.
 
-Beyond the one-day list below, nothing else is committed, and that is the
+Beyond the one-day list below (built), nothing else is committed, and that is the
 position, not a gap. A third narrated interaction would weaken the two that
 carry the piece. Add one only with a specific reason, and expect to retire
 something in exchange.
@@ -111,7 +115,7 @@ something in exchange.
 
 ## Settled decisions. Do not silently revisit
 
-### The one-day list: the page turns at midnight · DECIDED 2026-10-17, unbuilt
+### The one-day list: the page turns at midnight · DECIDED 2026-10-17, BUILT 2026-10-18
 
 The north star, and what the name promises: *To-Day* is literal. Every
 decision below was argued from how people actually respond to to-do lists,
@@ -156,6 +160,36 @@ and the reasoning matters more than the mechanics:
   research paragraphs" ruling still holds.
 - **Night is a lamp, not dark mode.** In desk, the room goes dark and a
   warm lamp lights the page; the paper stays light. Light-mode-only stands.
+
+**As built (2026-10-18), and the calls made while building it:**
+
+- **Dusk is a fixed 18:00**, not the sun: the rule is the deadline, and a
+  decay that started at 16:30 in December and 21:00 in June would make the
+  same evening feel different by season. Ease-in is quadratic. `decayAt` in
+  `day.ts` is the only source; it writes `--decay` on `<html>`.
+- **The floor is a 40% mix of ink into paper**, which measures 4.6:1 on the
+  fully yellowed desk page at midnight (5.4:1 in clean). That is the number
+  to keep above 4.5 if the paper or ink ever change.
+- **No decay opt-out, and a countdown instead.** WCAG 2.2.2 was weighed:
+  the decay changes a step a minute, not as visible motion, so it was
+  judged out of scope; 1.4.1 is met by "Turns in 2h 10m" in the status line
+  from dusk. The first-visit line is that countdown's first-visit wording.
+- **"Yesterday's page" means the page directly behind this one**, even if
+  you skipped days. Strictly "the page dated yesterday" would give an
+  every-other-day user nothing to carry, ever. Still only one page back,
+  never an archive. The offer names it honestly ("Tuesday's page").
+- **Carrying is rewriting**: the row gets the add sweep, because it is a
+  new line on a new page. It keeps its highlight.
+- **The clock is public** (the Clock tab in the bar), and faked time keeps
+  running. A page turned under a faked clock is a preview: the real page
+  is set aside (`gp-lab-day-real-v1`) and restored on "Back to real time"
+  or on reload.
+- **The turn** is a DOM copy of the page animated over the fresh one
+  (`playPageTurn`), so nothing waits on it. Desk lifts the sheet off the
+  coil; organic lifts the whole sketchbook page; clean lets the old list
+  fade; reduced motion crossfades in all three. Its duration is a real
+  slider ("Page turn"). A page that went stale while closed turns 700ms
+  after opening, so you see whose page it was.
 
 ### No animation library. CSS and WAAPI only
 
@@ -364,6 +398,11 @@ exactly this failure, and it survived a long time.
 - **A running WAAPI animation outranks inline styles.** The drag-release momentum
   animation has to be cancelled before FLIP can move that row — see the top of the
   layout effect.
+- **The page turn animates a copy of `.wrap`, not the page.** Anything
+  fixed or pad-shaped inside `.wrap` (the bar, the skin toggle, the coil,
+  the back board) has to be stripped from the copy in `playPageTurn`, or
+  it turns with the sheet. The copy sits above the page's stacking
+  context, so the layer is clipped to stop at the bar.
 - **Params persist in localStorage.** Changing `DEFAULTS` does nothing visible until
   you hit "reset to defaults" in the timings drawer. Expect to be confused by this.
 - **Centre things with margins, not transforms**, when the element also has a hover
