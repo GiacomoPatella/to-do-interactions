@@ -137,16 +137,18 @@ export function skyAt(m: number): Sky {
 }
 
 /** Where the plant's shadow falls (Shade.tsx), from the same sun as the
-    wood: `rot` swings it about the plant, following the sun's azimuth,
-    and `len` stretches it as the sun drops, since a low sun casts long
-    and a high one short. The scene is drawn for the late-morning sun
-    (about 11:20), so that is where both are neutral. `sun` is how much
-    direct light there is to cast a shadow at all. */
+    wood. `rot` swings it about the plant with the sun's azimuth, at a
+    third of the angle, and `len` stretches it as the sun drops, since a
+    low sun casts long and a high one short. Both are held down because
+    the shadow may only reach the title: the full swing, or a stretch
+    down the page rather than across it, would carry it off. Neutral for
+    the late-morning sun (about 11:20), which is what the scene is drawn
+    for. `sun` is how much direct light there is to cast one at all. */
 export function shadowAt(m: number) {
   const s = skyAt(m);
   const cot = 1 / Math.tan((Math.max(s.el, 1) * Math.PI) / 180);
   return {
-    rot: 30 + s.az,
+    rot: (30 + s.az) * 0.3,
     len: 0.85 + 0.22 * Math.min(cot, 3),
     sun: 1 - roomLight(m).night,
   };

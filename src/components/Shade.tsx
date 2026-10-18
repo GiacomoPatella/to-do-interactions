@@ -13,7 +13,7 @@
  *
  * The leaves are generated here from a fixed seed (the same shapes on
  * the server and in every browser, so there is nothing to hydrate) and
- * baked into blurred SVG images, one per branch. The sway then only
+ * baked into blurred SVG images, one per branch. The breeze then only
  * ever moves those images, with transforms: the blur is rasterised once,
  * not every frame. Each branch is blurred by its distance from the desk,
  * the far ones soft, the near ones sharper, which is what makes a cast
@@ -50,50 +50,52 @@ type BranchSpec = {
   blur: number;
   /* How dark its shadow is, before the sun's own strength. */
   alpha: number;
-  /* Sway: degrees around the stem's base, and seconds per swing. */
-  sway: number;
-  period: number;
+  /* The breeze: how far a full gust turns this branch about its base,
+     in degrees, and how long the air takes to reach it, in ms. */
+  give: number;
+  lag: number;
   seed: number;
 };
 
-/* Three branches, back to front. The far one is large and soft and is
-   most of the shade on the desk; the near one is small and crisp, and
-   is the one whose tips reach the corner of the page. */
+/* Three branches, back to front, reaching across the top of the window
+   rather than down it, since the shadow is only allowed as far as the
+   title. The far one is large and soft and is most of the shade on the
+   desk; the near one is small and crisp, and its tips cross the title. */
 const BRANCHES: BranchSpec[] = [
   {
-    from: [-90, -30],
-    ctrl: [230, 70],
-    to: [520, 330],
+    from: [-90, 0],
+    ctrl: [260, 70],
+    to: [640, 150],
     leaves: 11,
     len: [78, 104],
     blur: 11,
     alpha: 0.4,
-    sway: 0.9,
-    period: 7.9,
+    give: 0.7,
+    lag: 0,
     seed: 11,
   },
   {
     from: [-70, 90],
-    ctrl: [150, 250],
-    to: [330, 500],
+    ctrl: [220, 180],
+    to: [480, 175],
     leaves: 10,
     len: [62, 84],
     blur: 7,
     alpha: 0.46,
-    sway: 1.3,
-    period: 6.3,
+    give: 1,
+    lag: 70,
     seed: 23,
   },
   {
-    from: [30, -70],
-    ctrl: [270, -20],
-    to: [520, 150],
+    from: [60, -40],
+    ctrl: [340, 10],
+    to: [700, 115],
     leaves: 9,
     len: [44, 62],
     blur: 3.5,
     alpha: 0.5,
-    sway: 1.7,
-    period: 5.1,
+    give: 1.5,
+    lag: 130,
     seed: 37,
   },
 ];
@@ -109,11 +111,11 @@ type Branch = {
   y: number;
   w: number;
   h: number;
-  /* The stem's base, relative to the image: what the sway turns around. */
+  /* The stem's base, relative to the image: what the breeze turns it about. */
   ox: number;
   oy: number;
-  sway: number;
-  period: number;
+  give: number;
+  lag: number;
 };
 
 const f = (n: number) => n.toFixed(1);
@@ -135,7 +137,13 @@ function branch(s: BranchSpec): Branch {
 
   const pts: Pt[] = [0, 0.25, 0.5, 0.75, 1].map(at);
   let leaves = "";
-  const leaf = (base: Pt, a: number, len: number, wid: number, bend: number) => {
+  const leaf = (
+    base: Pt,
+    a: number,
+    len: number,
+    wid: number,
+    bend: number,
+  ) => {
     const dx = Math.cos(a),
       dy = Math.sin(a);
     const nx = -dy,
@@ -202,8 +210,8 @@ function branch(s: BranchSpec): Branch {
     h,
     ox: s.from[0] - x,
     oy: s.from[1] - y,
-    sway: s.sway,
-    period: s.period,
+    give: s.give,
+    lag: s.lag,
   };
 }
 
@@ -212,25 +220,27 @@ const PLANT = BRANCHES.map(branch);
 export function ShadeScene() {
   return (
     <div className="shade-day">
-      <div className="shade-sun">
-        <div className="shade-gap">
-          {PLANT.map((b, i) => (
-            <img
-              key={i}
-              className="shade-branch"
-              src={b.src}
-              alt=""
-              width={b.w}
-              height={b.h}
-              data-sway={b.sway}
-              data-period={b.period}
-              style={{
-                left: b.x,
-                top: b.y,
-                transformOrigin: `${b.ox}px ${b.oy}px`,
-              }}
-            />
-          ))}
+      <div className="shade-reach">
+        <div className="shade-sun">
+          <div className="shade-gap">
+            {PLANT.map((b, i) => (
+              <img
+                key={i}
+                className="shade-branch"
+                src={b.src}
+                alt=""
+                width={b.w}
+                height={b.h}
+                data-give={b.give}
+                data-lag={b.lag}
+                style={{
+                  left: b.x,
+                  top: b.y,
+                  transformOrigin: `${b.ox}px ${b.oy}px`,
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
       <div className="shade-cloud" />
@@ -240,11 +250,19 @@ export function ShadeScene() {
 
 /* ---- the moving parts ----
 
-   The sway: each branch turns a degree or so around its base, on its
-   own period, plus a slower drift added on top (composite: "add"), so
-   the three never line up into one repeating loop. A plant inside an
-   open window, not a tree in a gale. Off under reduced motion; the
-   shadow itself stays.
+   The breeze: a plant by an open window is still most of the time. Now
+   and then a puff of air reaches it, and each branch jolts, quickly and
+   only a degree or so, then rings back to rest. That's a light, stiff
+   stem struck by an impulse, so it is one: a damped oscillator (about
+   2Hz, which puts the peak ~120ms after the air arrives) with a faster,
+   smaller flutter of the leaves riding on it, sampled into keyframes the
+   way tools/spring.mjs bakes the UI's springs. A steady sine sway was
+   tried first and read as slow motion of the real thing: the stillness
+   between gusts is what makes the gusts read. The air reaches the far
+   branch first and the near one a beat later, each gust a little
+   different, sometimes two in quick succession. Gusts add (composite:
+   "add"), so a second one landing on the first doesn't snap it back.
+   Off under reduced motion; the shadow itself stays.
 
    The clouds: a cloud over the sun doesn't sweep a shadow edge across a
    room the way it does across a field. The window is lit by the sun's
@@ -254,9 +272,38 @@ export function ShadeScene() {
    it is is decided once a day, from the date: some days a cloud every
    minute or so, some days one every few minutes. */
 
+/* One gust, as keyframes: the stem's damped ring (2.1Hz, damping ratio
+   0.28) plus a leaf flutter (7Hz, gone in a few cycles), driven by an
+   impulse, so it starts at rest, peaks fast, and settles back to exactly
+   rest. `give` is the peak in degrees; the flutter adds a few tenths of
+   a pixel of shiver along with it. */
+const RING_MS = 1800;
+function ring(give: number): Keyframe[] {
+  const n = 54;
+  const w = 2 * Math.PI * 2.1,
+    z = 0.28;
+  const wd = w * Math.sqrt(1 - z * z);
+  const wf = 2 * Math.PI * 7;
+  // Normalise so the first peak is `give`.
+  const tp = Math.atan(wd / (z * w)) / wd;
+  const peak = Math.exp(-z * w * tp) * Math.sin(wd * tp);
+  const frames: Keyframe[] = [];
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * (RING_MS / 1000);
+    const env = i === n ? 0 : 1;
+    const th = (env * give * Math.exp(-z * w * t) * Math.sin(wd * t)) / peak;
+    const fl = env * give * 0.35 * Math.exp(-9 * t) * Math.sin(wf * t);
+    frames.push({
+      transform: `rotate(${th.toFixed(3)}deg) translate(${(fl * 0.8).toFixed(2)}px, ${(fl * 0.5).toFixed(2)}px)`,
+    });
+  }
+  return frames;
+}
+
 function dayCover(key: string) {
   let h = 2166136261;
-  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 16777619);
+  for (let i = 0; i < key.length; i++)
+    h = Math.imul(h ^ key.charCodeAt(i), 16777619);
   return 0.15 + 0.85 * rng(h)();
 }
 
@@ -267,35 +314,43 @@ export function startAmbient(opts: {
   day: () => string;
 }) {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const anims: Animation[] = [];
 
-  if (!reduced) {
+  let gustTimer = 0;
+  function gust() {
+    gustTimer = window.setTimeout(gust, 3_000 + Math.random() * 10_000);
+    if (document.hidden || document.documentElement.dataset.variant !== "desk")
+      return;
+    if (opts.sun() < 0.15) return;
+    puff(0.5 + Math.random() * 0.5);
+    // Sometimes the air comes in twice.
+    if (Math.random() < 0.3) {
+      const again = 350 + Math.random() * 500;
+      window.setTimeout(() => puff(0.3 + Math.random() * 0.4), again);
+    }
+  }
+  function puff(strength: number) {
+    const now = document.timeline.currentTime as number;
+    // One gust's shape per branch, applied to both copies of that branch.
+    const shapes = new Map<string, { frames: Keyframe[]; at: number }>();
     document.querySelectorAll<HTMLElement>(".shade-branch").forEach((el) => {
-      const a = Number(el.dataset.sway);
-      const p = Number(el.dataset.period) * 1000;
-      const swing = el.animate(
-        [{ transform: `rotate(${-a}deg)` }, { transform: `rotate(${a}deg)` }],
-        { duration: p, iterations: Infinity, direction: "alternate", easing: "ease-in-out" },
-      );
-      const drift = el.animate(
-        [
-          { transform: "translate(0, 0)" },
-          { transform: `translate(${a * 2.5}px, ${a * 1.5}px)` },
-        ],
-        {
-          duration: p * 2.3,
-          iterations: Infinity,
-          direction: "alternate",
-          easing: "ease-in-out",
-          composite: "add",
-        },
-      );
-      // One timeline for both copies of the scene, whenever each mounted.
-      swing.startTime = 0;
-      drift.startTime = 0;
-      anims.push(swing, drift);
+      const key = `${el.dataset.give}`;
+      let g = shapes.get(key);
+      if (!g) {
+        g = {
+          frames: ring(
+            Number(el.dataset.give) * strength * (0.75 + Math.random() * 0.5),
+          ),
+          at: now + Number(el.dataset.lag) + Math.random() * 40,
+        };
+        shapes.set(key, g);
+      }
+      const a = el.animate(g.frames, { duration: RING_MS, composite: "add" });
+      a.startTime = g.at;
+      a.onfinish = () => a.cancel();
     });
   }
+  if (!reduced)
+    gustTimer = window.setTimeout(gust, 2_000 + Math.random() * 4_000);
 
   let timer = 0;
   const schedule = (ms: number) => {
@@ -327,14 +382,22 @@ export function startAmbient(opts: {
     const now = document.timeline.currentTime;
     document.querySelectorAll<HTMLElement>(".shade-cloud").forEach((el) => {
       const a = el.animate(
-        dim.map((o, i) => ({ opacity: o, offset: offsets[i], easing: "ease-in-out" })),
+        dim.map((o, i) => ({
+          opacity: o,
+          offset: offsets[i],
+          easing: "ease-in-out",
+        })),
         timing,
       );
       a.startTime = now;
     });
     document.querySelectorAll<HTMLElement>(".shade-gap").forEach((el) => {
       const a = el.animate(
-        dim.map((o, i) => ({ opacity: 1 - o * 0.85, offset: offsets[i], easing: "ease-in-out" })),
+        dim.map((o, i) => ({
+          opacity: 1 - o * 0.85,
+          offset: offsets[i],
+          easing: "ease-in-out",
+        })),
         timing,
       );
       a.startTime = now;
@@ -353,6 +416,9 @@ export function startAmbient(opts: {
 
   return () => {
     window.clearTimeout(timer);
-    anims.forEach((a) => a.cancel());
+    window.clearTimeout(gustTimer);
+    document
+      .querySelectorAll(".shade-branch")
+      .forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
   };
 }

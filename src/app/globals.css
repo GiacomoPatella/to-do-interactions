@@ -2485,6 +2485,19 @@ html[data-variant="desk"] .book-shade {
 html[data-shade] .shade-day {
   opacity: calc(1 - var(--night, 0));
 }
+/* Over the title, never over the list (Desk.tsx sets --shade-stop just
+   under the title). A soft fall-off rather than a line, so it reads as
+   the shadow running out rather than being cut. The clouds aren't
+   masked: they dim the whole window light. */
+.shade-reach {
+  position: absolute;
+  inset: 0;
+  mask-image: linear-gradient(
+    to bottom,
+    #000 calc(var(--shade-stop, 100vh) - 64px),
+    transparent var(--shade-stop, 100vh)
+  );
+}
 /* Swung about the plant, off the top-left corner, as the sun moves. */
 .shade-sun {
   position: absolute;
@@ -2494,7 +2507,10 @@ html[data-shade] .shade-day {
   height: 800px;
   transform-origin: -120px -160px;
   transform: rotate(var(--shade-rot, 0deg))
-    scale(calc(var(--shade-len, 1) * var(--shade-fit, 1)));
+    scale(
+      calc(var(--shade-len, 1) * var(--shade-fit, 1)),
+      var(--shade-fit, 1)
+    );
 }
 .shade-gap {
   position: absolute;

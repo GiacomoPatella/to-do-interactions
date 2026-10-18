@@ -58,8 +58,10 @@ page turn applies in all three.
   time, a lamp at night, a clock scrub control in the bar; (3) ambient
   leaf shadows and clouds; (4) rare events such as a bird's shadow.
   Steps 1 and 2 are built, and step 3's first half: the shadow of a
-  plant on the sill, swaying, swinging with the sun, and clouds that
-  dim the window light now and then (`Shade.tsx`, drawn twice, over the
+  plant on the sill, stirred by an occasional breeze (a quick damped
+  jolt, then stillness; a steady sway read as slow motion), crossing the
+  title but never the list, and clouds that dim the window light now and
+  then (`Shade.tsx`, drawn twice, over the
   wood and over the pad, on one timeline). The light is a fixed daily curve, not a real
   sunset (`roomLight` / `skyAt` in `day.ts`): it drives the WebGL relight
   and `.book-light`, a multiply layer on the pad, and `layout.tsx` inlines
