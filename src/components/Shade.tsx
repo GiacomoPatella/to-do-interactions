@@ -250,19 +250,27 @@ export function ShadeScene() {
 
 /* ---- the moving parts ----
 
-   The breeze: a plant by an open window is still most of the time. Now
-   and then a puff of air reaches it, and each branch jolts, quickly and
-   only a degree or so, then rings back to rest. That's a light, stiff
-   stem struck by an impulse, so it is one: a damped oscillator (about
-   2Hz, which puts the peak ~120ms after the air arrives) with a faster,
-   smaller flutter of the leaves riding on it, sampled into keyframes the
-   way tools/spring.mjs bakes the UI's springs. A steady sine sway was
-   tried first and read as slow motion of the real thing: the stillness
-   between gusts is what makes the gusts read. The air reaches the far
-   branch first and the near one a beat later, each gust a little
-   different, sometimes two in quick succession. Gusts add (composite:
-   "add"), so a second one landing on the first doesn't snap it back.
-   Off under reduced motion; the shadow itself stays.
+   The breeze: a plant by an open window is still most of the time,
+   and now and then the air moves. A breeze is a push that builds, blows
+   and drops, so that is what's simulated: a force with a soft rise,
+   gusting a little while it lasts, acting on each stem as a damped
+   spring. The stem leans into it, quivers while the air keeps moving,
+   and rings a little when it lets go, rising slower or faster with the
+   breeze and never the same twice. Two earlier versions failed in
+   instructive ways: a steady sine sway read as the real thing in slow
+   motion, and a struck impulse read as someone tapping the plant every
+   ten seconds, the same tap each time.
+
+   Variety comes in two layers. The breezes are four kinds in a
+   shuffled rotation (BREEZES, below), never the same kind twice
+   running, so the rhythm doesn't repeat. And each branch feels its own
+   turbulence, with its own stiffness — the big far branch slower, the
+   near one quicker — and the air reaches the far one first, so the
+   three never move as one. Simulated per breeze and baked into
+   keyframes, the way tools/spring.mjs bakes the UI's springs; both
+   copies of a branch get the same keyframes and start time. Breezes
+   add (composite: "add"), so one arriving on another doesn't snap it
+   back. Off under reduced motion; the shadow itself stays.
 
    The clouds: a cloud over the sun doesn't sweep a shadow edge across a
    room the way it does across a field. The window is lit by the sun's
@@ -272,32 +280,101 @@ export function ShadeScene() {
    it is is decided once a day, from the date: some days a cloud every
    minute or so, some days one every few minutes. */
 
-/* One gust, as keyframes: the stem's damped ring (2.1Hz, damping ratio
-   0.28) plus a leaf flutter (7Hz, gone in a few cycles), driven by an
-   impulse, so it starts at rest, peaks fast, and settles back to exactly
-   rest. `give` is the peak in degrees; the flutter adds a few tenths of
-   a pixel of shiver along with it. */
-const RING_MS = 1800;
-function ring(give: number): Keyframe[] {
-  const n = 54;
-  const w = 2 * Math.PI * 2.1,
-    z = 0.28;
-  const wd = w * Math.sqrt(1 - z * z);
-  const wf = 2 * Math.PI * 7;
-  // Normalise so the first peak is `give`.
-  const tp = Math.atan(wd / (z * w)) / wd;
-  const peak = Math.exp(-z * w * tp) * Math.sin(wd * tp);
-  const frames: Keyframe[] = [];
-  for (let i = 0; i <= n; i++) {
-    const t = (i / n) * (RING_MS / 1000);
-    const env = i === n ? 0 : 1;
-    const th = (env * give * Math.exp(-z * w * t) * Math.sin(wd * t)) / peak;
-    const fl = env * give * 0.35 * Math.exp(-9 * t) * Math.sin(wf * t);
-    frames.push({
-      transform: `rotate(${th.toFixed(3)}deg) translate(${(fl * 0.8).toFixed(2)}px, ${(fl * 0.5).toFixed(2)}px)`,
-    });
+/* The four kinds of breeze. Each is one or more swells of air, times
+   in seconds: when it starts, how long it takes to build, holds, and
+   takes to drop, and how hard it pushes. `turb` is how gusty the air is
+   while it blows. */
+type Swell = {
+  at: number;
+  rise: number;
+  hold: number;
+  fall: number;
+  push: number;
+};
+const BREEZES: { swells: Swell[]; turb: number }[] = [
+  // A swell: builds slowly, leans the plant over, lets it back.
+  {
+    swells: [{ at: 0, rise: 0.9, hold: 0.8, fall: 1.2, push: 0.8 }],
+    turb: 0.2,
+  },
+  // A puff: quicker and shorter, the one that rings.
+  {
+    swells: [{ at: 0, rise: 0.35, hold: 0.15, fall: 0.45, push: 1 }],
+    turb: 0.15,
+  },
+  // A rolling breeze: three waves, the middle one strongest.
+  {
+    swells: [
+      { at: 0, rise: 0.7, hold: 0.4, fall: 0.6, push: 0.55 },
+      { at: 1.3, rise: 0.6, hold: 0.3, fall: 0.7, push: 0.9 },
+      { at: 2.6, rise: 0.8, hold: 0.2, fall: 1, push: 0.45 },
+    ],
+    turb: 0.3,
+  },
+  // A flurry: short, uneven pushes, the leaves fluttering through it.
+  {
+    swells: [
+      { at: 0, rise: 0.35, hold: 0.1, fall: 0.3, push: 0.65 },
+      { at: 0.55, rise: 0.25, hold: 0.2, fall: 0.35, push: 0.9 },
+      { at: 1.25, rise: 0.3, hold: 0.1, fall: 0.5, push: 0.5 },
+    ],
+    turb: 0.45,
+  },
+];
+
+const SETTLE = 1.6;
+const ease = (t: number) =>
+  0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, t)));
+
+/* One breeze on one branch, as keyframes. `give` is the branch's peak
+   lean in degrees; returns the frames and their duration in ms. */
+function blow(kind: number, give: number, rnd: () => number) {
+  const { swells, turb } = BREEZES[kind];
+  const end = Math.max(...swells.map((w) => w.at + w.rise + w.hold + w.fall));
+  const air = (t: number) =>
+    swells.reduce((sum, w) => {
+      const u = t - w.at;
+      if (u < 0) return sum;
+      const up = ease(u / w.rise);
+      const down = 1 - ease((u - w.rise - w.hold) / w.fall);
+      return sum + w.push * Math.min(up, down);
+    }, 0);
+  // This branch's own turbulence: three wobbles at its own phases.
+  const wob = [0.9, 2.3, 4.1].map((hz, i) => ({
+    w: 2 * Math.PI * hz * (0.8 + 0.4 * rnd()),
+    p: rnd() * 2 * Math.PI,
+    a: [0.5, 0.3, 0.2][i],
+  }));
+  const gust = (t: number) =>
+    wob.reduce((s, o) => s + o.a * Math.sin(o.w * t + o.p), 0);
+
+  // Stiffer the smaller the branch.
+  const w = 2 * Math.PI * (1.2 + 0.5 * give),
+    z = 0.32;
+  const dt = 1 / 240,
+    fps = 30;
+  const dur = end + SETTLE;
+  let th = 0,
+    v = 0,
+    peak = 0;
+  const raw: [number, number][] = [];
+  for (let i = 0, t = 0; t <= dur; i++, t = i * dt) {
+    const a = air(t);
+    const target = a * (1 + turb * gust(t));
+    v += (w * w * (target - th) - 2 * z * w * v) * dt;
+    th += v * dt;
+    peak = Math.max(peak, Math.abs(th));
+    if (i % (240 / fps) === 0) raw.push([th, a * gust(t * 1.9 + 3)]);
   }
-  return frames;
+  const k = peak > 0 ? give / peak : 0;
+  const frames: Keyframe[] = raw.map(([r, fl], i) => {
+    const last = i === raw.length - 1;
+    const f = last ? 0 : fl * give * 0.9;
+    return {
+      transform: `rotate(${(last ? 0 : r * k).toFixed(3)}deg) translate(${(f * 0.8).toFixed(2)}px, ${(f * 0.5).toFixed(2)}px)`,
+    };
+  });
+  return { frames, ms: dur * 1000 };
 }
 
 function dayCover(key: string) {
@@ -315,42 +392,57 @@ export function startAmbient(opts: {
 }) {
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  let gustTimer = 0;
-  function gust() {
-    gustTimer = window.setTimeout(gust, 3_000 + Math.random() * 10_000);
-    if (document.hidden || document.documentElement.dataset.variant !== "desk")
-      return;
-    if (opts.sun() < 0.15) return;
-    puff(0.5 + Math.random() * 0.5);
-    // Sometimes the air comes in twice.
-    if (Math.random() < 0.3) {
-      const again = 350 + Math.random() * 500;
-      window.setTimeout(() => puff(0.3 + Math.random() * 0.4), again);
+  let breezeTimer = 0;
+  let deck: number[] = [];
+  let last = -1;
+  function draw() {
+    if (!deck.length) {
+      deck = BREEZES.map((_, i) => i).sort(() => Math.random() - 0.5);
+      // Never the same kind twice running, across a reshuffle too.
+      if (deck[deck.length - 1] === last) deck.reverse();
     }
+    last = deck.pop()!;
+    return last;
   }
-  function puff(strength: number) {
+  function breeze() {
+    let next = 4_000 + Math.random() * 9_000;
+    if (
+      !document.hidden &&
+      document.documentElement.dataset.variant === "desk" &&
+      opts.sun() >= 0.15
+    ) {
+      next += blowAll(draw(), 0.6 + Math.random() * 0.4);
+    }
+    breezeTimer = window.setTimeout(breeze, next);
+  }
+  function blowAll(kind: number, strength: number) {
     const now = document.timeline.currentTime as number;
-    // One gust's shape per branch, applied to both copies of that branch.
-    const shapes = new Map<string, { frames: Keyframe[]; at: number }>();
+    let longest = 0;
+    // One simulation per branch, shared by both copies of it.
+    const done = new Map<
+      string,
+      { frames: Keyframe[]; ms: number; at: number }
+    >();
     document.querySelectorAll<HTMLElement>(".shade-branch").forEach((el) => {
       const key = `${el.dataset.give}`;
-      let g = shapes.get(key);
-      if (!g) {
-        g = {
-          frames: ring(
-            Number(el.dataset.give) * strength * (0.75 + Math.random() * 0.5),
-          ),
-          at: now + Number(el.dataset.lag) + Math.random() * 40,
+      let b = done.get(key);
+      if (!b) {
+        const give = Number(el.dataset.give);
+        b = {
+          ...blow(kind, give * strength, Math.random),
+          at: now + Number(el.dataset.lag) + Math.random() * 60,
         };
-        shapes.set(key, g);
+        done.set(key, b);
       }
-      const a = el.animate(g.frames, { duration: RING_MS, composite: "add" });
-      a.startTime = g.at;
+      const a = el.animate(b.frames, { duration: b.ms, composite: "add" });
+      a.startTime = b.at;
       a.onfinish = () => a.cancel();
+      longest = Math.max(longest, b.ms);
     });
+    return longest;
   }
   if (!reduced)
-    gustTimer = window.setTimeout(gust, 2_000 + Math.random() * 4_000);
+    breezeTimer = window.setTimeout(breeze, 2_000 + Math.random() * 4_000);
 
   let timer = 0;
   const schedule = (ms: number) => {
@@ -406,17 +498,20 @@ export function startAmbient(opts: {
   }
   // The first one soon, so a visit sees the weather at all.
   schedule(12_000 + Math.random() * 25_000);
-  // In development, `__cloud()` in the console passes one now.
+  // In development, `__cloud()` in the console passes one now, and
+  // `__breeze(0–3)` blows one of the four breezes.
   if (process.env.NODE_ENV !== "production") {
     (window as unknown as { __cloud: () => void }).__cloud = () => {
       window.clearTimeout(timer);
       cloud();
     };
+    (window as unknown as { __breeze: (k?: number) => void }).__breeze = (k) =>
+      blowAll(k ?? draw(), 1);
   }
 
   return () => {
     window.clearTimeout(timer);
-    window.clearTimeout(gustTimer);
+    window.clearTimeout(breezeTimer);
     document
       .querySelectorAll(".shade-branch")
       .forEach((el) => el.getAnimations().forEach((a) => a.cancel()));
