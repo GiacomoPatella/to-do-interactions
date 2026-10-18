@@ -1,9 +1,12 @@
+import { ShadeScene } from "./Shade";
+
 /**
  * The stationery around the desk skin's page: everything that makes the
  * page a notepad rather than a loose sheet. None of it is interactive and
- * none of it moves — it is the object the list is written in. The one
- * exception is the light falling on it (.book-light), which follows the
- * time of day.
+ * none of it moves — it is the object the list is written in. The
+ * exceptions are the light falling on it (.book-light), which follows the
+ * time of day, and the plant's shadow and the clouds (.book-shade, the
+ * pad's copy of Shade.tsx).
  *
  * A top-bound, spiral notepad, at every width: the coil, a few leaves
  * under today's page showing at the sides (drawn by .wrap::before), the
@@ -24,6 +27,11 @@ export default function Booklet() {
       <div className="book-used" aria-hidden="true" />
       <div className="book-binding" aria-hidden="true" />
       <div className="book-light" aria-hidden="true" />
+      <div className="book-shade" aria-hidden="true">
+        <div className="shade-fix">
+          <ShadeScene />
+        </div>
+      </div>
     </>
   );
 }

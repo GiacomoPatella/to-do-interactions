@@ -57,7 +57,10 @@ page turn applies in all three.
   next: (1) the page on the desk, static; (2) light that follows local
   time, a lamp at night, a clock scrub control in the bar; (3) ambient
   leaf shadows and clouds; (4) rare events such as a bird's shadow.
-  Steps 1 and 2 are built. The light is a fixed daily curve, not a real
+  Steps 1 and 2 are built, and step 3's first half: the shadow of a
+  plant on the sill, swaying, swinging with the sun, and clouds that
+  dim the window light now and then (`Shade.tsx`, drawn twice, over the
+  wood and over the pad, on one timeline). The light is a fixed daily curve, not a real
   sunset (`roomLight` / `skyAt` in `day.ts`): it drives the WebGL relight
   and `.book-light`, a multiply layer on the pad, and `layout.tsx` inlines
   `roomLight`'s source so a night visit paints dark from the first frame.
@@ -403,6 +406,12 @@ exactly this failure, and it survived a long time.
   the back board) has to be stripped from the copy in `playPageTurn`, or
   it turns with the sheet. The copy sits above the page's stacking
   context, so the layer is clipped to stop at the bar.
+- **The plant's shadow exists twice** (`.desk-shade` over the wood,
+  `.book-shade` inside the page's group), because one layer can't blend
+  with both. Both are fixed to the window and their animations share
+  `startTime = 0`, which is the only thing keeping them aligned: an
+  animation added to one copy and not the other shows as a seam at the
+  pad's edge.
 - **Params persist in localStorage.** Changing `DEFAULTS` does nothing visible until
   you hit "reset to defaults" in the timings drawer. Expect to be confused by this.
 - **Centre things with margins, not transforms**, when the element also has a hover

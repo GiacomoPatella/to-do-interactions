@@ -2435,3 +2435,81 @@ html[data-variant="desk"] .book-light {
       )
       fixed;
 }
+
+/* ---- the plant's shadow, and clouds ----
+   Shade.tsx draws the scene; it is here twice, over the wood
+   (.desk-shade, fixed behind the pad) and over the pad (.book-shade,
+   inside the page's group, next to .book-light). Both multiply, both are
+   fixed to the window, so the two copies line up exactly and the shadow
+   runs unbroken off the desk onto the paper.
+
+   The pad's copy is clipped to the board: clip-path, unlike overflow,
+   clips a fixed descendant, which is the only reason .shade-fix can be
+   fixed and still stop at the pad's edge. Above .book-light, under the
+   bar and the skin toggle like it. */
+.desk-shade,
+.book-shade {
+  display: none;
+}
+html[data-variant="desk"] .desk-shade {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+html[data-variant="desk"] .book-shade {
+  display: block;
+  position: absolute;
+  z-index: 33;
+  inset: -2px -7px -11px;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  clip-path: inset(0 round 2px 2px 4px 4px);
+}
+.shade-fix {
+  position: fixed;
+  inset: 0;
+}
+/* The sun's strength: no shadow without direct light, so it goes with
+   the evening. Hidden until Desk.tsx has placed it for the sun, then
+   faded in. */
+.shade-day {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 600ms var(--ease-out);
+}
+html[data-shade] .shade-day {
+  opacity: calc(1 - var(--night, 0));
+}
+/* Swung about the plant, off the top-left corner, as the sun moves. */
+.shade-sun {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1000px;
+  height: 800px;
+  transform-origin: -120px -160px;
+  transform: rotate(var(--shade-rot, 0deg))
+    scale(calc(var(--shade-len, 1) * var(--shade-fit, 1)));
+}
+.shade-gap {
+  position: absolute;
+  inset: 0;
+}
+.shade-branch {
+  position: absolute;
+  max-width: none;
+  will-change: transform;
+}
+/* A cloud over the sun: the direct light goes, so everything it lit
+   dims and cools a little. Opacity driven by startAmbient(). */
+.shade-cloud {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: rgb(206 212 224);
+}

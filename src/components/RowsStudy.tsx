@@ -283,10 +283,12 @@ function playPageTurn(ms: number, reduced: boolean) {
   const leaf = wrap.cloneNode(true) as HTMLElement;
   // The pad, the bar and the fixed controls stay where they are; only
   // the written sheet turns. It keeps the room's light (.book-light), or
-  // at midnight a white sheet would lift out of a lamplit room.
+  // at midnight a white sheet would lift out of a lamplit room, but not
+  // the plant's shadow: that is fixed to the window, and stays put on
+  // the fresh page underneath.
   leaf
     .querySelectorAll(
-      ".bar, .variant-toggle, .book-cover, .book-used, .book-binding, .sr-only",
+      ".bar, .variant-toggle, .book-cover, .book-used, .book-binding, .book-shade, .sr-only",
     )
     .forEach((n) => n.remove());
   leaf.removeAttribute("id");
