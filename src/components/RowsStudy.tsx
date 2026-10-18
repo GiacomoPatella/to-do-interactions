@@ -43,7 +43,14 @@ import {
   useSyncExternalStore,
 } from "react";
 import { getClock, getServerClock, setClock, subscribeClock } from "./clock";
-import { minuteOfDay, startOfDay } from "./day";
+import {
+  dayKey,
+  daysBetween,
+  decayAt,
+  minuteOfDay,
+  startOfDay,
+  turnCountdown,
+} from "./day";
 
 /* `marked` is the highlighter: emphasis chosen by you, not a state the
    app infers. Deliberately separate from `done` — see the note in
@@ -54,6 +61,14 @@ type Row = { id: string; text: string; done: boolean; marked: boolean };
    longer uses ghosts: see deletingIds below for why (it fades in place,
    in the live list, instead). */
 type Ghost = { row: Row; top: number; out: boolean };
+/* One day's page. Today's rows live in `rows` like they always have; the
+   page they belong to is `pageDate`, and the one before it lies face-down
+   as `yesterday` — kept so one unfinished row can be pulled across, and
+   for nothing else. Only ever one page back: anything older is gone, or
+   the face-down pile becomes an archive to dig through. */
+type Page = { date: string; rows: Row[] };
+/* The real page, set aside when a faked clock turns it. See turnPage. */
+type DaySnapshot = Page & { yesterday: Page | null; offer: boolean };
 
 type DragState = {
   id: string;
@@ -113,6 +128,7 @@ type Params = {
   settle: number;
   enter: number;
   hide: number;
+  turn: number;
   move: MoveKey;
 };
 
@@ -134,6 +150,7 @@ const DEFAULTS: Params = {
   settle: 170,
   enter: 170, // matches settle: an arriving row is a quiet moment, not a signature one.
   hide: 170, // matches settle too, so the status line's glide and the fade finish together.
+  turn: 900, // once a day, the rarest thing in the app, so it can afford to be watched.
   move: "swap",
 };
 
@@ -148,10 +165,20 @@ const SLIDERS: { key: DurationKey; label: string }[] = [
   { key: "settle", label: "Settle" },
   { key: "enter", label: "Enter" },
   { key: "hide", label: "Hide" },
+  { key: "turn", label: "Page turn" },
 ];
 
 const STORE_KEY = "gp-lab-rows-v1";
 const PARAMS_KEY = "gp-lab-rows-params-v1";
+/* Which day `rows` belongs to, yesterday's face-down page, and whether
+   the carry-over choice is still open. */
+const DAY_KEY = "gp-lab-day-v1";
+/* The real page while a faked clock has turned it. See turnPage. */
+const REAL_KEY = "gp-lab-day-real-v1";
+
+/* How long a page that turned while the app was closed stays on screen
+   before it turns: long enough to see that it was yesterday's. */
+const TURN_ON_OPEN_DELAY_MS = 700;
 
 /* Per-row delay when a whole list arrives at once. Mirrors --b-stagger
    in globals.css, and is only used here to work out when the sequence
@@ -188,6 +215,165 @@ function clearTransitionAfter(el: HTMLElement, ms: number) {
   };
   el.addEventListener("transitionend", onEnd);
   timer = window.setTimeout(clear, ms + 100);
+}
+
+/** Rows out of storage, validated one by one. A malformed row is dropped
+    rather than failing the whole list. */
+function parseRows(parsed: unknown): Row[] | null {
+  if (!Array.isArray(parsed)) return null;
+  return (
+    parsed
+      .filter(
+        (r): r is Row =>
+          !!r &&
+          typeof r === "object" &&
+          typeof (r as Row).id === "string" &&
+          typeof (r as Row).text === "string" &&
+          typeof (r as Row).done === "boolean",
+      )
+      /* `marked` arrived after rows were already in people's storage, so
+         it is read defensively rather than required by the filter above —
+         an older row simply comes back unmarked instead of being
+         discarded. */
+      .map((r) => ({
+        id: r.id,
+        text: r.text,
+        done: r.done,
+        marked: r.marked === true,
+      }))
+  );
+}
+
+function parsePage(p: unknown): Page | null {
+  if (!p || typeof p !== "object") return null;
+  const { date, rows } = p as Record<string, unknown>;
+  const parsed = parseRows(rows);
+  return typeof date === "string" && parsed ? { date, rows: parsed } : null;
+}
+
+/* What the carry-over offer calls the page it is offering from. */
+function pageName(from: string, to: string) {
+  const d = daysBetween(from, to);
+  if (d <= 1) return "yesterday's page";
+  if (d < 7) {
+    const day = new Date(`${from}T12:00:00`).toLocaleDateString([], {
+      weekday: "long",
+    });
+    return `${day}'s page`;
+  }
+  return "your last page";
+}
+
+/** Turn the page on screen: a copy of the page as it stands is laid over
+    the fresh one and animated away, then discarded. A copy rather than
+    the live page, so the new day can render underneath at once and the
+    ordering is structural — nothing waits on the animation, and nothing
+    the animation does can touch the rows.
+
+    Each skin turns in its own language. Desk lifts its sheet off the pad
+    over the coil; organic, which has no pad, lifts the whole sketchbook
+    page; clean just lets the old list go. Reduced motion is a crossfade
+    in all three. */
+function playPageTurn(ms: number, reduced: boolean) {
+  const wrap = document.querySelector<HTMLElement>("main.wrap");
+  if (!wrap) return;
+  const variant = document.documentElement.dataset.variant;
+  const rect = wrap.getBoundingClientRect();
+
+  const leaf = wrap.cloneNode(true) as HTMLElement;
+  // The pad, the bar and the fixed controls stay where they are; only
+  // the written sheet turns.
+  leaf
+    .querySelectorAll(
+      ".bar, .variant-toggle, .book-cover, .book-used, .book-binding, .book-light, .sr-only",
+    )
+    .forEach((n) => n.remove());
+  leaf.removeAttribute("id");
+  leaf.querySelectorAll("[id]").forEach((n) => n.removeAttribute("id"));
+  leaf.classList.add("page-leaf");
+  Object.assign(leaf.style, {
+    position: "absolute",
+    top: `${rect.top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    margin: "0",
+    minHeight: "0",
+  });
+
+  const layer = document.createElement("div");
+  layer.className = "page-turn";
+  layer.setAttribute("aria-hidden", "true");
+  layer.inert = true;
+
+  /* Organic's page is the whole window, so that is what lifts. */
+  let moving: HTMLElement = leaf;
+  if (variant === "organic") {
+    moving = document.createElement("div");
+    moving.className = "page-sheet";
+    moving.appendChild(leaf);
+  }
+  const shade = document.createElement("div");
+  shade.className = "page-turn-shade";
+  if (variant === "desk") {
+    Object.assign(shade.style, {
+      top: `${rect.top}px`,
+      left: `${rect.left}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
+    });
+  }
+  layer.append(shade, moving);
+  /* Stop at the bar, open drawer included. The bar lives inside the
+     page's stacking context, so it cannot be lifted above the turn; the
+     turn is clipped short of it instead. */
+  const bar = document.querySelector(".bar");
+  if (bar) {
+    layer.style.bottom = `${innerHeight - bar.getBoundingClientRect().top}px`;
+  }
+  layer.style.perspectiveOrigin =
+    variant === "desk" ? `${rect.left + rect.width / 2}px ${rect.top}px` : "50% 0";
+  document.body.appendChild(layer);
+
+  const anims: Animation[] = [];
+  if (reduced) {
+    anims.push(moving.animate([{ opacity: 1 }, { opacity: 0 }], ms * 0.6));
+  } else if (variant === "clean") {
+    anims.push(
+      moving.animate(
+        [
+          { opacity: 1, transform: "none" },
+          { opacity: 0, transform: "translateY(-6px)" },
+        ],
+        { duration: ms * 0.5, easing: "cubic-bezier(0.22, 1, 0.36, 1)" },
+      ),
+    );
+  } else {
+    /* Hinged at the top edge, where the coil is: the sheet's free edge
+       comes up off the pad towards you and goes over the top. It is gone
+       just past edge-on, which is where a real page stops being the page
+       you are looking at. In-out, because a page has weight: it is
+       picked up, then it goes. */
+    anims.push(
+      moving.animate(
+        [
+          { transform: "rotateX(0deg)", opacity: 1 },
+          { transform: "rotateX(72deg)", opacity: 1, offset: 0.78 },
+          { transform: "rotateX(96deg)", opacity: 0 },
+        ],
+        { duration: ms, easing: "cubic-bezier(0.55, 0, 0.25, 1)" },
+      ),
+      /* The lifting sheet's shadow on the page beneath it. */
+      shade.animate(
+        [{ opacity: 0 }, { opacity: 1, offset: 0.45 }, { opacity: 0 }],
+        { duration: ms, easing: "ease-in-out" },
+      ),
+    );
+  }
+  const done = () => layer.remove();
+  Promise.all(anims.map((a) => a.finished)).then(done, done);
+  // A hidden tab freezes the animation; the copy must not outlive it.
+  window.setTimeout(done, ms + 1000);
 }
 
 /** Where in a row's text did this click land? Read against the *display*
@@ -488,6 +674,15 @@ export default function RowsStudy() {
   const [justCompleted, setJustCompleted] = useState<ReadonlySet<string>>(
     new Set(),
   );
+  /* The one-day list. See Page above, and turnPage below. */
+  const [pageDate, setPageDate] = useState("");
+  const [yesterday, setYesterday] = useState<Page | null>(null);
+  /* Whether the carry-over choice is still open: true from the turn until
+     you carry something or start fresh. */
+  const [offer, setOffer] = useState(false);
+  /* Nothing in storage when the app opened. A first visit after dusk
+     gets one line saying why the ink is going. */
+  const [firstVisit, setFirstVisit] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem("gp-lab-variant");
@@ -536,6 +731,10 @@ export default function RowsStudy() {
      every slider drag. */
   const paramsRef = useRef(params);
   paramsRef.current = params;
+  /* The real page, while a faked clock has turned it. */
+  const realSnap = useRef<DaySnapshot | null>(null);
+  const loadedAt = useRef(0);
+  const turnTimer = useRef(0);
 
   /* ---- reduced motion, read in JS as well as CSS ---- */
   useEffect(() => {
@@ -554,34 +753,56 @@ export default function RowsStudy() {
      the server render cannot know what the browser has stored. */
   useEffect(() => {
     let initial: Row[] | null = null;
+    let first = true;
     try {
       const raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        const parsed: unknown = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          initial = parsed
-            .filter(
-              (r): r is Row =>
-                !!r &&
-                typeof r === "object" &&
-                typeof (r as Row).id === "string" &&
-                typeof (r as Row).text === "string" &&
-                typeof (r as Row).done === "boolean",
-            )
-            /* `marked` arrived after rows were already in people's
-               storage, so it is read defensively rather than required by
-               the filter above — an older row simply comes back
-               unmarked instead of being discarded. */
-            .map((r) => ({
-              id: r.id,
-              text: r.text,
-              done: r.done,
-              marked: r.marked === true,
-            }));
-        }
-      }
+      first = raw === null;
+      if (raw) initial = parseRows(JSON.parse(raw));
     } catch {
       /* corrupt storage reads as a first visit */
+    }
+
+    /* Which day those rows belong to. A list stored before the one-day
+       rule existed has no date, and counts as today's: shipping the rule
+       must not wipe anybody's list on the day it lands. */
+    const today = dayKey(Date.now());
+    let day: Omit<DaySnapshot, "rows"> = {
+      date: today,
+      yesterday: null,
+      offer: false,
+    };
+    try {
+      const d: unknown = JSON.parse(localStorage.getItem(DAY_KEY) ?? "null");
+      if (d && typeof d === "object" && typeof (d as Page).date === "string") {
+        const src = d as Record<string, unknown>;
+        day = {
+          date: src.date as string,
+          yesterday: parsePage(src.yesterday),
+          offer: src.offer === true,
+        };
+      }
+    } catch {
+      /* unreadable: today's page, nothing behind it */
+    }
+    /* A faked clock is never saved, so a load is always real time. If a
+       faked midnight turned the page before this reload, the real page is
+       still set aside: put it back. */
+    try {
+      const raw = localStorage.getItem(REAL_KEY);
+      localStorage.removeItem(REAL_KEY);
+      const snap: unknown = raw ? JSON.parse(raw) : null;
+      const page = parsePage(snap);
+      if (page && page.date <= today && day.date > today) {
+        const src = snap as Record<string, unknown>;
+        initial = page.rows;
+        day = {
+          date: page.date,
+          yesterday: parsePage(src.yesterday),
+          offer: src.offer === true,
+        };
+      }
+    } catch {
+      /* nothing to restore */
     }
     // A stored empty list is respected: the user emptied it on purpose.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -589,6 +810,11 @@ export default function RowsStudy() {
       initial ??
         SEED.map((text) => ({ id: uid(), text, done: false, marked: false })),
     );
+    setFirstVisit(first);
+    setPageDate(day.date);
+    setYesterday(day.yesterday);
+    setOffer(day.offer && !!day.yesterday);
+    loadedAt.current = Date.now();
 
     /* Timings persist too: a tuning you liked should survive a reload.
        Every field is validated individually so a partial or edited blob
@@ -603,7 +829,7 @@ export default function RowsStudy() {
           const next: Params = { ...DEFAULTS };
           for (const { key } of SLIDERS) {
             const v = src[key];
-            if (typeof v === "number" && Number.isFinite(v) && v >= 20 && v <= 900) {
+            if (typeof v === "number" && Number.isFinite(v) && v >= 20 && v <= 1200) {
               next[key] = v;
             }
           }
@@ -635,6 +861,18 @@ export default function RowsStudy() {
       /* private mode: the app still works, it just forgets */
     }
   }, [rows, loaded]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    try {
+      localStorage.setItem(
+        DAY_KEY,
+        JSON.stringify({ date: pageDate, yesterday, offer }),
+      );
+    } catch {
+      /* as above */
+    }
+  }, [pageDate, yesterday, offer, loaded]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -1195,6 +1433,147 @@ export default function RowsStudy() {
     announce("sample rows restored");
   }, [snap, announce]);
 
+  /* ---- the one-day list ----
+     Every task is for today. From dusk the open rows' ink goes (that is
+     all stylesheet, off --decay), and at midnight the page turns: today's
+     rows go face-down as `yesterday`, and the new page starts empty. The
+     morning after, you may pull ONE unfinished row across — chosen, never
+     earned, and only from the page directly behind this one.
+
+     The timers and handlers below read the state through `latest`, not
+     through their closures: a turn can fire from a timeout scheduled
+     several renders earlier. */
+  const latest = useRef({ rows, pageDate, yesterday, offer, deletingIds });
+  latest.current = { rows, pageDate, yesterday, offer, deletingIds };
+
+  /* Everything mid-flight belongs to the page it started on. */
+  const clearTransient = useCallback(() => {
+    editClosed.current = true;
+    setEditing(null);
+    setGhosts([]);
+    setDeletingIds(new Set());
+    setDeletingOut(new Set());
+    setDrawing(new Set());
+    setEntering(new Set());
+    setJustCompleted(new Set());
+    setUndoable(null);
+  }, []);
+
+  /* Midnight. A page turn, not a wipe: yesterday's rows still exist, face
+     down, you just cannot write on them.
+
+     Under a faked clock this is a preview, and must not cost anyone
+     their list: the real page is set aside first (in storage too, in case
+     of a reload) and put back when the clock returns to real time. */
+  const turnPage = useCallback(
+    (today: string) => {
+      const { rows: rs, pageDate: from, yesterday: prev, offer: wasOpen, deletingIds: dying } =
+        latest.current;
+      const kept = rs.filter((r) => !dying.has(r.id));
+      if (getClock().faked && !realSnap.current) {
+        realSnap.current = { date: from, rows: kept, yesterday: prev, offer: wasOpen };
+        try {
+          localStorage.setItem(REAL_KEY, JSON.stringify(realSnap.current));
+        } catch {
+          /* the preview still works; a reload just keeps it */
+        }
+      }
+      const p = paramsRef.current;
+      if (!document.hidden && kept.length > 0) {
+        playPageTurn(p.turn * p.timeScale, reduced.current);
+      }
+      clearTransient();
+      const open = kept.some((r) => !r.done);
+      setYesterday({ date: from, rows: kept });
+      setRows([]);
+      setPageDate(today);
+      setOffer(open);
+      announce(
+        open
+          ? "midnight, the page has turned. carry one unfinished task over, or start fresh"
+          : "midnight, the page has turned",
+      );
+    },
+    [announce, clearTransient],
+  );
+
+  const restoreReal = useCallback(() => {
+    const s = realSnap.current;
+    if (!s) return;
+    realSnap.current = null;
+    try {
+      localStorage.removeItem(REAL_KEY);
+    } catch {
+      /* nothing to clear */
+    }
+    clearTransient();
+    setRows(s.rows);
+    setEntering(new Set(s.rows.map((r) => r.id)));
+    setYesterday(s.yesterday);
+    setPageDate(s.date);
+    setOffer(s.offer);
+    announce("back to real time, your page is as you left it");
+  }, [announce, clearTransient]);
+
+  /* The clock decides. A page that went stale while the app was closed
+     turns a beat after opening, so you see whose page it was before it
+     goes. A date that went BACKWARDS only happens when a faked clock is
+     returned to real time, and is the preview being undone. */
+  useEffect(() => {
+    if (!loaded || !clock.now || !pageDate) return;
+    const today = dayKey(clock.now);
+    if (today > pageDate) {
+      if (turnTimer.current) return;
+      const wait = Math.max(
+        0,
+        loadedAt.current + TURN_ON_OPEN_DELAY_MS - Date.now(),
+      );
+      turnTimer.current = window.setTimeout(() => {
+        turnTimer.current = 0;
+        const t = dayKey(getClock().now);
+        if (t > latest.current.pageDate) turnPage(t);
+      }, wait);
+    } else if (today < pageDate && realSnap.current) {
+      restoreReal();
+    }
+  }, [clock, loaded, pageDate, turnPage, restoreReal]);
+
+  useEffect(() => () => window.clearTimeout(turnTimer.current), []);
+
+  /* The decay is one number on <html>; the stylesheet decides what it
+     does in each skin. On <html> rather than this section because the
+     paper it yellows is the page's, outside this component. */
+  useEffect(() => {
+    if (!clock.now) return;
+    document.documentElement.style.setProperty(
+      "--decay",
+      decayAt(clock.now).toFixed(3),
+    );
+  }, [clock]);
+
+  /* Carrying is rewriting: the row is written onto today's page fresh,
+     with the same rule sweep as any row you add, because it is a new line
+     on a new page. Its highlight comes with it — you marked it as the one
+     that mattered, and it still is. */
+  const carryOver = useCallback(
+    (row: Row) => {
+      snap();
+      const id = uid();
+      setRows((r) => [{ id, text: row.text, done: false, marked: row.marked }, ...r]);
+      if (reduced.current) setEntering((s) => new Set(s).add(id));
+      else setDrawing((s) => new Set(s).add(id));
+      setOffer(false);
+      announce(`carried over: ${row.text}`);
+    },
+    [snap, announce],
+  );
+
+  const startFresh = useCallback(() => {
+    snap();
+    setOffer(false);
+    announce("starting fresh, nothing carried over");
+  }, [snap, announce]);
+
   /* ---- editing ----
      caret is undefined for the keyboard path (Enter has no click point to
      read) and for anything that didn't resolve to real text; the input's
@@ -1495,7 +1874,8 @@ export default function RowsStudy() {
   }
 
   /* ---- render ---- */
-  const showEmpty = loaded && rows.length === 0 && ghosts.length === 0;
+  const showEmpty =
+    loaded && rows.length === 0 && ghosts.length === 0 && !offer;
   /* Distinct from showEmpty: the list is not empty, hideDone is just
      hiding all of it. Saying "nothing left" here would be a lie. */
   const showAllHidden =
@@ -1510,6 +1890,10 @@ export default function RowsStudy() {
   const total = rows.length;
   const doneCount = rows.reduce((n, r) => n + (r.done ? 1 : 0), 0);
   const allDone = total > 0 && doneCount === total;
+  /* The decay in words, so the deadline is never colour alone. Only from
+     dusk, when the ink has started to go; before that there is nothing
+     to explain. */
+  const countdown = loaded && clock.now ? turnCountdown(clock.now) : "";
 
   /* Both halves of the timing system, handed to CSS as custom
      properties. Everything downstream is calc(--b-x * --t). */
@@ -1586,6 +1970,42 @@ export default function RowsStudy() {
           </span>
         </label>
       </form>
+
+      {/* The carry-over choice, the morning after. Above the list and not
+          in it: these are yesterday's rows, and nothing here is on today's
+          page until you pick it. A highlighted row comes first — the
+          natural suggestion — and nothing is pre-chosen. */}
+      {offer && yesterday && (
+        <FadeIn className="rows-carry">
+          <p className="rows-carry-head">
+            From {pageName(yesterday.date, pageDate)} · carry one over
+          </p>
+          <ul className="rows-carry-list">
+            {[
+              ...yesterday.rows.filter((r) => !r.done && r.marked),
+              ...yesterday.rows.filter((r) => !r.done && !r.marked),
+            ].map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  className="rows-carry-item"
+                  data-marked={r.marked ? "true" : undefined}
+                  aria-label={`carry over: ${r.text}`}
+                  onClick={() => carryOver(r)}
+                >
+                  <span className="rows-carry-text">{r.text}</span>
+                  <span className="rows-carry-cta" aria-hidden="true">
+                    carry over
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <button type="button" className="rows-carry-skip" onClick={startFresh}>
+            Start fresh
+          </button>
+        </FadeIn>
+      )}
 
       <div className="rows-listbox">
         <ul
@@ -1810,7 +2230,8 @@ export default function RowsStudy() {
         {showEmpty && (
           <FadeIn className="rows-empty">
             <span>
-              Nothing left · press <kbd>n</kbd> to add a row, or{" "}
+              {yesterday ? "A fresh page" : "Nothing left"} · press{" "}
+              <kbd>n</kbd> to add a row, or{" "}
               <button type="button" onClick={reseed}>
                 restore the samples
               </button>
@@ -1859,6 +2280,13 @@ export default function RowsStudy() {
             `${doneCount} of ${total} done`
           )}
         </span>
+        {countdown && (
+          <span className="rows-turn">
+            {firstVisit
+              ? `This page turns at midnight · ${countdown} left`
+              : `Turns in ${countdown}`}
+          </span>
+        )}
         {doneCount > 0 && (
           <button
             type="button"

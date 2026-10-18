@@ -54,7 +54,17 @@
      Named for the pen, not the job, so reassigning a role never
      means renaming a colour. */
   --paper: #fffdf7;
-  --bg: var(--paper);
+  /* The one-day list's decay, 0 all day to 1 at midnight, written onto
+     <html> by RowsStudy.tsx from the clock. The paper yellows a little
+     with it: the page ages through the evening. Clean resets --bg to
+     plain white and keeps only the fading ink, below. */
+  --decay: 0;
+  --paper-dusk: #f2e3bf;
+  --bg: color-mix(
+    in oklab,
+    var(--paper),
+    var(--paper-dusk) calc(var(--decay) * 55%)
+  );
   --surface: #ffffff;
   --wash: #f6f2e8;
   --ink: #23201c;
@@ -938,7 +948,7 @@ h1 {
   place-items: center;
   width: 1.25rem;
   height: 1.25rem;
-  border: 2px solid var(--ink);
+  border: 2px solid var(--ink-now, var(--ink));
   border-radius: 3px 7px 4px 8px / 7px 3px 8px 4px;
   filter: var(--stroke-filter);
   transform: rotate(-1.5deg);
@@ -1012,7 +1022,7 @@ h1 {
   font: inherit;
   font-size: var(--text-md);
   line-height: 1.4;
-  color: var(--ink);
+  color: var(--ink-now, var(--ink));
   text-align: left;
   overflow-wrap: anywhere;
   cursor: text;
@@ -1028,6 +1038,26 @@ h1 {
 .rows-row[data-done="true"] .rows-title {
   color: var(--muted);
 }
+/* ---- the decay: open rows lose their ink from dusk ----
+   Only open rows: a finished row stays exactly as it was, the record of
+   what got done, so the pressure lands only where something can still
+   be done about it. --decay is time alone (see day.ts), so every open
+   row fades together; a row added at eleven is as faint as the rest.
+
+   The readability floor is the 40%: at --decay 1 the ink is mixed 40%
+   into the paper, which still clears 4.5:1 against the yellowed page.
+   It feels nearly gone at five to midnight and it is still comfortably
+   legible, because a list you cannot read is broken whatever it is
+   trying to say. Not transitioned: it moves a step a minute, and a
+   scrub of the clock is direct manipulation, so it should follow. */
+.rows-row:not([data-state="done"]):not([data-done="true"]) {
+  --ink-now: color-mix(
+    in oklab,
+    var(--ink),
+    var(--bg) calc(var(--decay, 0) * 40%)
+  );
+}
+
 .rows-title-text {
   position: relative;
   z-index: 0;
@@ -1351,10 +1381,196 @@ h1 {
   cursor: pointer;
 }
 
+/* ---- the carry-over choice ----
+   Yesterday's unfinished rows, the morning after, in the faded ink they
+   were left in at midnight. Framed like the empty state, because it is
+   the same kind of thing: a quiet offer on a page that has nothing on it
+   yet. Each row is one button, the whole width, so picking one is a
+   single obvious act. */
+.rows-carry {
+  position: relative;
+  margin-top: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4) var(--sp-2);
+  opacity: 0;
+  transition: opacity var(--d-enter) var(--ease-out);
+}
+.rows-carry[data-in] {
+  opacity: 1;
+}
+.rows-carry::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 2px dashed var(--line);
+  border-radius: 8px 16px 10px 18px / 16px 8px 18px 10px;
+  filter: var(--stroke-filter);
+  pointer-events: none;
+}
+.rows-carry-head {
+  margin: 0 0 var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+html:not([data-variant="clean"]) .rows-carry-head {
+  font-size: var(--text-sm);
+}
+.rows-carry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rows-carry-item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  width: calc(100% + 2 * var(--sp-2));
+  min-height: 2.5rem;
+  margin-inline: calc(-1 * var(--sp-2));
+  padding: var(--sp-1) var(--sp-2);
+  border: 0;
+  border-radius: 5px 11px 6px 12px / 11px 5px 12px 6px;
+  background: none;
+  font-family: var(--font-row);
+  font-size: var(--text-md);
+  line-height: 1.4;
+  text-align: left;
+  color: color-mix(in oklab, var(--ink), var(--bg) 40%);
+  cursor: pointer;
+  transition:
+    background-color var(--d-hover) ease,
+    color var(--d-hover) ease;
+}
+html:not([data-variant="clean"]) .rows-carry-item {
+  font-size: 1.09rem;
+}
+.rows-carry-text {
+  position: relative;
+  z-index: 0;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+/* Yesterday's highlight, still on the page, as faded as the ink. */
+.rows-carry-item[data-marked] .rows-carry-text::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0.02em -0.15em;
+  background: var(--hilite);
+  mix-blend-mode: multiply;
+  opacity: 0.6;
+  border-radius: 2px 6px 3px 7px / 6px 2px 7px 3px;
+}
+.rows-carry-cta {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--marker);
+  opacity: 0;
+  transition: opacity var(--d-hover) ease;
+}
+.rows-carry-item:focus-visible .rows-carry-cta {
+  opacity: 1;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-carry-item:hover {
+    background: var(--wash);
+    color: var(--ink);
+  }
+  .rows-carry-item:hover .rows-carry-cta {
+    opacity: 1;
+  }
+}
+/* No hover to reveal it on touch, so it is always there. */
+@media (hover: none) {
+  .rows-carry-cta {
+    opacity: 1;
+  }
+}
+.rows-carry-skip {
+  position: relative;
+  margin-top: var(--sp-2);
+  padding: 0;
+  border: none;
+  background: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+  transition: color var(--d-hover) ease;
+}
+.rows-carry-skip::after {
+  content: "";
+  position: absolute;
+  inset: -12px -4px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .rows-carry-skip:hover {
+    color: var(--ink);
+  }
+}
+
+/* ---- the page turn ----
+   A copy of the page as it stood at midnight, laid over the new one and
+   animated away by playPageTurn() in RowsStudy.tsx, then discarded.
+   Above the page and its controls, and nothing on it can be reached. */
+.page-turn {
+  position: fixed;
+  inset: 0;
+  z-index: 39;
+  overflow: hidden;
+  pointer-events: none;
+  perspective: 1800px;
+}
+.page-turn .page-leaf,
+.page-sheet {
+  transform-origin: 50% 0;
+  backface-visibility: hidden;
+}
+/* Organic's page is the window: the lifting sheet is the whole of it
+   (the layer already stops at the bar), with its own tooth so it is the same paper. */
+.page-sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.page-sheet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  opacity: 0.22;
+  mix-blend-mode: multiply;
+  background: var(--paper-tooth) 0 0 / 600px 600px;
+}
+/* The lifting sheet's shadow on the page under it. */
+.page-turn-shade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 18, 8, 0.26),
+    rgba(30, 18, 8, 0) 60%
+  );
+}
+/* Only one sheet turns, not the stack of leaves under it. */
+html[data-variant="desk"] .wrap.page-leaf::before {
+  box-shadow:
+    0 0 0 0.5px rgba(70, 50, 30, 0.12),
+    0 10px 24px rgba(20, 10, 4, 0.28);
+}
+
 /* ---- status line ---- */
 
 .rows-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-3);
   min-height: 2rem;
@@ -1418,6 +1634,11 @@ h1 {
 /* A quiet utility toggle, not an action: styled as a link like "restore
    the samples" rather than as a bordered pill, so it does not compete
    with undo delete, the one thing in this row worth an accent. */
+/* The time left, from dusk. Same voice as the count beside it. */
+.rows-turn {
+  white-space: nowrap;
+}
+
 .rows-hide-toggle {
   padding: 0;
   border: none;
@@ -1551,6 +1772,26 @@ h1 {
 }
 .bar-speed input[type="range"] {
   width: 7rem;
+  min-width: 3.5rem;
+  flex: 0 1 7rem;
+}
+/* A phone has room for the slider or for its word, not both. The input
+   carries its own label, so the word is the one that goes, and the tabs
+   pull in so the slider keeps a usable length. */
+@media (max-width: 30rem) {
+  .bar-strip {
+    gap: var(--sp-2);
+    padding-inline: var(--sp-3);
+  }
+  .bar-speed > span {
+    display: none;
+  }
+  .bar-tabs {
+    gap: var(--sp-1);
+  }
+  .bar-tab {
+    padding-inline: var(--sp-2);
+  }
 }
 .bar-speed output {
   min-width: 2.75rem;
@@ -1674,7 +1915,6 @@ input[type="range"] {
    shout in capitals. A faked time is the system telling you something
    about itself, which is exactly what blue is reserved for. */
 .bar-clock {
-  min-width: 5.5rem;
   font-variant-numeric: tabular-nums;
   text-transform: none;
   letter-spacing: 0.02em;
@@ -2014,7 +2254,7 @@ html[data-variant="desk"] .wrap::before {
   inset: 0;
   z-index: -1;
   border-radius: 1px 1px 2px 2px;
-  background: var(--paper);
+  background: var(--bg);
   box-shadow:
     0 0 0 0.5px rgba(70, 50, 30, 0.12),
     -1.5px 1px 0 #f3eee2,
