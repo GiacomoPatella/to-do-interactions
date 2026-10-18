@@ -1649,10 +1649,39 @@ input[type="range"] {
     border-color var(--d-hover, 110ms) ease;
 }
 @media (hover: hover) and (pointer: fine) {
-  .bar-reset:hover {
+  .bar-reset:not(:disabled):hover {
     color: var(--marker);
     border-color: var(--marker);
   }
+}
+.bar-reset:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The Clock drawer's jumps, in a row under the scrub. */
+.bar-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
+}
+.bar-presets .bar-reset {
+  margin-top: 0;
+}
+
+/* The clock tab reads the time, so it gets even figures and does not
+   shout in capitals. A faked time is the system telling you something
+   about itself, which is exactly what blue is reserved for. */
+.bar-clock {
+  min-width: 5.5rem;
+  font-variant-numeric: tabular-nums;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.bar-clock[data-faked]:not([aria-expanded="true"]) {
+  border-color: var(--biro);
+  color: var(--biro);
 }
 
 /* ---- the shortcuts legend ---- */

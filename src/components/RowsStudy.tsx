@@ -40,7 +40,10 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
+import { getClock, getServerClock, setClock, subscribeClock } from "./clock";
+import { minuteOfDay, startOfDay } from "./day";
 
 /* `marked` is the highlighter: emphasis chosen by you, not a state the
    app infers. Deliberately separate from `done` — see the note in
@@ -228,6 +231,18 @@ const KEYS: [string, string][] = [
   ["⌘z", "Undo"],
   ["s", "Slow motion"],
 ];
+
+/* The Clock drawer's jumps. The last one exists to watch midnight
+   happen: it lands ten seconds short, and the faked clock keeps running. */
+const CLOCK_PRESETS: [string, number][] = [
+  ["Morning", 9 * 60],
+  ["Dusk", 18 * 60],
+  ["11 pm", 23 * 60],
+  ["10s to midnight", 24 * 60 - 10 / 60],
+];
+
+const formatTime = (ms: number) =>
+  new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
 
 const GripDots = () => (
   <svg width="8" height="14" viewBox="0 0 8 14" aria-hidden="true">
@@ -445,9 +460,11 @@ export default function RowsStudy() {
     | null
   >(null);
   const [params, setParams] = useState<Params>(DEFAULTS);
-  const [drawer, setDrawer] = useState<null | "timings" | "list" | "keys">(
-    null,
-  );
+  const [drawer, setDrawer] = useState<
+    null | "timings" | "list" | "keys" | "clock"
+  >(null);
+  /* Real time, or the time the Clock drawer is faking. See clock.ts. */
+  const clock = useSyncExternalStore(subscribeClock, getClock, getServerClock);
   const [staggering, setStaggering] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
@@ -1923,6 +1940,56 @@ export default function RowsStudy() {
           </FadeIn>
         )}
 
+        {/* The scrub-through clock. Public on purpose: the decay and the
+            page turn only happen in the evening, so without it most people
+            would never see what the name promises. Faking is an offset, so
+            the clock keeps running from wherever you put it. */}
+        {drawer === "clock" && (
+          <FadeIn className="bar-drawer">
+            <div className="ctrls">
+              <label className="ctrl">
+                <span>Time of day{clock.faked ? " · faked" : ""}</span>
+                <output>{clock.now ? formatTime(clock.now) : ""}</output>
+                <input
+                  type="range"
+                  min={0}
+                  max={24 * 60 - 1}
+                  step={1}
+                  value={Math.floor(minuteOfDay(clock.now || Date.now()))}
+                  aria-valuetext={clock.now ? formatTime(clock.now) : undefined}
+                  onChange={(e) =>
+                    setClock(
+                      startOfDay(clock.now) + Number(e.target.value) * 60_000,
+                    )
+                  }
+                />
+              </label>
+            </div>
+            <div className="bar-presets">
+              {CLOCK_PRESETS.map(([label, min]) => (
+                <button
+                  key={label}
+                  type="button"
+                  className="bar-reset"
+                  onClick={() =>
+                    setClock(startOfDay(clock.now) + Math.round(min * 60_000))
+                  }
+                >
+                  {label}
+                </button>
+              ))}
+              <button
+                type="button"
+                className="bar-reset"
+                disabled={!clock.faked}
+                onClick={() => setClock(null)}
+              >
+                Back to real time
+              </button>
+            </div>
+          </FadeIn>
+        )}
+
         {drawer === "keys" && (
           <FadeIn className="bar-drawer">
             <dl className="keys">
@@ -1959,6 +2026,20 @@ export default function RowsStudy() {
           </label>
 
           <div className="bar-tabs">
+            {/* The tab IS the readout: it always shows the time the app
+                thinks it is, and says so when that time is faked. */}
+            <button
+              type="button"
+              className="bar-tab bar-clock"
+              data-faked={clock.faked ? "true" : undefined}
+              aria-expanded={drawer === "clock"}
+              aria-label={`clock, ${clock.now ? formatTime(clock.now) : ""}${
+                clock.faked ? ", faked" : ""
+              }`}
+              onClick={() => setDrawer((d) => (d === "clock" ? null : "clock"))}
+            >
+              {clock.now ? formatTime(clock.now) : "Clock"}
+            </button>
             <button
               type="button"
               className="bar-tab"
